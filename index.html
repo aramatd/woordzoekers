@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="nl">
 <head>
@@ -5,31 +6,23 @@
 <title>Woordzoeker Generator</title>
 
 <style>
+
 body{
-    font-family: Arial, sans-serif;
+font-family: monospace;
 }
 
 #grid{
-    display:grid;
-    grid-template-columns: repeat(15,30px);
-    gap:2px;
-    margin-top:20px;
-}
-
-.cell{
-    width:30px;
-    height:30px;
-    border:1px solid #999;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-weight:bold;
-    font-size:16px;
+white-space: pre;
+font-size:20px;
+line-height:1.6;
+margin-top:20px;
 }
 
 .solution{
-    color:red;
+color:red;
+font-weight:bold;
 }
+
 </style>
 </head>
 
@@ -125,7 +118,7 @@ words.sort((a,b)=>b.length-a.length)
 let attempts = 0
 let success = false
 let grid
-let solutionCells = Array.from({length:size},()=>Array(size).fill(false))
+let solutionCells
 
 while(!success && attempts < maxAttempts){
 
@@ -223,25 +216,25 @@ index++
 
 function draw(grid,solutionCells){
 
-let container = document.getElementById("grid")
-container.innerHTML=""
+let output=""
 
 for(let r=0;r<size;r++){
+
 for(let c=0;c<size;c++){
 
-let cell=document.createElement("div")
-cell.className="cell"
-
 if(solutionCells[r][c]){
-cell.classList.add("solution")
+output += "<span class='solution'>"+grid[r][c]+"</span> "
+}else{
+output += grid[r][c] + " "
 }
 
-cell.textContent=grid[r][c]
+}
 
-container.appendChild(cell)
+output += "\n"
 
 }
-}
+
+document.getElementById("grid").innerHTML = output
 
 }
 
@@ -249,3 +242,4 @@ container.appendChild(cell)
 
 </body>
 </html>
+```
