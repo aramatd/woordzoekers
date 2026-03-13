@@ -4,25 +4,18 @@
 <meta charset="UTF-8">
 <title>Woordzoeker Generator</title>
 <style>
-body{
-  font-family: monospace;
-}
-#grid{
-  margin-top:20px;
-  line-height:1.6;
-  font-size:20px;
-}
-textarea{
-  margin-top:10px;
-}
+body { font-family: monospace; }
+#grid { margin-top:20px; line-height:1.6; font-size:20px; }
+textarea { margin-top:10px; width: 400px; }
+.wordGroups { margin-top:10px; }
 </style>
 </head>
 <body>
 
 <h2>Woordzoeker Generator</h2>
 
-<textarea id="words" rows="15" cols="30">
-REY
+<h3>1. Woordenlijst</h3>
+<textarea id="words" rows="15">REY
 CUENTAS
 SALIENDO
 DEBIA
@@ -53,11 +46,16 @@ OFENSAS
 CADA
 UNO
 DIEZ
-YO
-</textarea>
+YO</textarea>
+
+<h3>2. Verborgen boodschap</h3>
+<textarea id="hidden" rows="2">PERDONAIS DE TODO CORAZON</textarea>
 
 <br><br>
 <button onclick="generate()">Genereer puzzel</button>
+
+<div class="wordGroups" id="wordGroups"></div>
+<p id="totals"></p>
 
 <div id="grid"></div>
 <p id="emptyCount"></p>
@@ -66,91 +64,120 @@ YO
 <textarea id="excel" rows="20" cols="60"></textarea>
 
 <script>
-const size = 15;  // Rastergrootte
-const maxAttempts = 25000; // Aantal pogingen
+// Minimum rasterafmetingen
+const minRows = 7;
+const minCols = 7;
 
 function generate() {
-  let words = document.getElementById("words").value
-    .split("\n")
-    .map(w => w.trim().toUpperCase())
-    .filter(w => w.length>0);
+    // Woordenlijst
+    let words = document.getElementById("words").value.split("\n")
+        .map(w => w.trim().toUpperCase()).filter(w=>w.length>0);
 
-  words.sort((a,b)=>b.length - a.length); // Lange woorden eerst
+    // Verborgen boodschap
+    let hidden = document.getElementById("hidden").value.replace(/\s/g,'').toUpperCase();
+    let hiddenLength = hidden.length;
 
-  let attempts = 0;
-  let success = false;
-  let grid;
+    // Groepeer woorden op lengte
+    let groups = {};
+    let totalWordLetters = 0;
+    words.forEach(w=>{
+        totalWordLetters += w.length;
+        if(!groups[w.length]) groups[w.length] = [];
+        groups[w.length].push(w);
+    });
 
-  while(!success && attempts < maxAttempts){
-    attempts++;
-    grid = Array.from({length:size},()=>Array(size).fill(""));
-    success = true;
+    let groupHtml = '';
+    Object.keys(groups).sort((a,b)=>a-b).forEach(len=>{
+        groupHtml += len + ' letters: ' + groups[len].join(', ') + '<br>';
+    });
+    document.getElementById('wordGroups').innerHTML = groupHtml;
 
-    for(let word of words){
-      let placed = false;
-      let directions = ["H","V","D1","D2"];
-      directions = directions.sort(()=>Math.random()-0.5); // Shuffle richtingen
+    document.getElementById('totals').innerHTML = "Totaal aantal letters in woordenlijst: " + totalWordLetters +
+        "<br>Totaal aantal letters in verborgen boodschap: " + hiddenLength;
 
-      for(let dir of directions){
-        let row = Math.floor(Math.random()*size);
-        let col = Math.floor(Math.random()*size);
-        let len = word.length;
+    // Bepaal rasterafmetingen (minder vakjes dan totaal letters)
+    let totalLetters = totalWordLetters + hiddenLength;
+    let rows = Math.max(minRows, Math.floor(Math.sqrt(totalLetters)*0.9));
+    let cols = Math.max(minCols, Math.floor(Math.sqrt(totalLetters)*0.9));
 
-        if(dir==="H" && col+len<=size){
-          let fits=true;
-          for(let i=0;i<len;i++){
-            if(grid[row][col+i]!=="") fits=false;
-          }
-          if(fits){for(let i=0;i<len;i++){grid[row][col+i]=word[i]} placed=true; break;}
+    let grid = Array.from({length: rows}, ()=>Array(cols).fill(""));
 
-        } else if(dir==="V" && row+len<=size){
-          let fits=true;
-          for(let i=0;i<len;i++){
-            if(grid[row+i][col]!=="") fits=false;
-          }
-          if(fits){for(let i=0;i<len;i++){grid[row+i][col]=word[i]} placed=true; break;}
+    // Plaatsing: eerste 5 diagonaal
+    let wordIndex = 0;
+    for(let i=0;i<words.length;i++){
+        let word = words[i];
+        let placed = false;
+        let directions = [];
+        if(wordIndex<5) directions = ["D1","D2"]; // eerst 5 diagonaal
+        else directions = (wordIndex%2===0) ? ["H"] : ["V"]; // daarna afwisselend
+        directions = directions.sort(()=>Math.random()-0.5);
 
-        } else if(dir==="D1" && row+len<=size && col+len<=size){ // diag TL->BR
-          let fits=true;
-          for(let i=0;i<len;i++){
-            if(grid[row+i][col+i]!=="") fits=false;
-          }
-          if(fits){for(let i=0;i<len;i++){grid[row+i][col+i]=word[i]} placed=true; break;}
+        for(let dir of directions){
+            let attempt=0;
+            while(!placed && attempt<500){
+                attempt++;
+                let row = Math.floor(Math.random()*rows);
+                let col = Math.floor(Math.random()*cols);
+                let len = word.length;
 
-        } else if(dir==="D2" && row+len<=size && col-len+1>=0){ // diag TR->BL
-          let fits=true;
-          for(let i=0;i<len;i++){
-            if(grid[row+i][col-i]!=="") fits=false;
-          }
-          if(fits){for(let i=0;i<len;i++){grid[row+i][col-i]=word[i]} placed=true; break;}
+                if(dir==="H" && col+len<=cols){
+                    let fits=true;
+                    for(let j=0;j<len;j++){
+                        if(grid[row][col+j]!=="") fits=false;
+                    }
+                    if(fits){for(let j=0;j<len;j++){grid[row][col+j]=word[j];} placed=true;}
+
+                } else if(dir==="V" && row+len<=rows){
+                    let fits=true;
+                    for(let j=0;j<len;j++){
+                        if(grid[row+j][col]!=="") fits=false;
+                    }
+                    if(fits){for(let j=0;j<len;j++){grid[row+j][col]=word[j];} placed=true;}
+
+                } else if(dir==="D1" && row+len<=rows && col+len<=cols){ // TL->BR
+                    let fits=true;
+                    for(let j=0;j<len;j++){
+                        if(grid[row+j][col+j]!=="") fits=false;
+                    }
+                    if(fits){for(let j=0;j<len;j++){grid[row+j][col+j]=word[j];} placed=true;}
+
+                } else if(dir==="D2" && row+len<=rows && col-len+1>=0){ // TR->BL
+                    let fits=true;
+                    for(let j=0;j<len;j++){
+                        if(grid[row+j][col-j]!=="") fits=false;
+                    }
+                    if(fits){for(let j=0;j<len;j++){grid[row+j][col-j]=word[j];} placed=true;}
+                }
+            }
         }
-      }
-
-      if(!placed){success=false; break;}
+        wordIndex++;
     }
-  }
 
-  if(!success){alert("Geen oplossing gevonden na "+maxAttempts+" pogingen."); return;}
-
-  draw(grid);
-}
-
-function draw(grid){
-  let htmlOutput="", excelOutput="";
-  let emptyCount = 0;
-  for(let r=0;r<size;r++){
-    for(let c=0;c<size;c++){
-      let letter = grid[r][c] || "_"; // lege vakjes als _
-      if(grid[r][c]==="") emptyCount++;
-      htmlOutput += letter + " ";
-      excelOutput += letter + "\t";
+    // Tellen van lege vakjes
+    let emptyCount=0;
+    for(let r=0;r<rows;r++){
+        for(let c=0;c<cols;c++){
+            if(grid[r][c]==="") emptyCount++;
+        }
     }
-    htmlOutput += "<br>";
-    excelOutput += "\n";
-  }
-  document.getElementById("grid").innerHTML = htmlOutput;
-  document.getElementById("excel").value = excelOutput;
-  document.getElementById("emptyCount").innerText = "Aantal lege vakjes: " + emptyCount;
+
+    document.getElementById("emptyCount").innerText =
+        "Aantal vakjes tekort voor verborgen boodschap: " + Math.max(0, hiddenLength - emptyCount);
+
+    // Toon raster
+    let htmlOutput="";
+    let excelOutput="";
+    for(let r=0;r<rows;r++){
+        for(let c=0;c<cols;c++){
+            let letter = grid[r][c] || "_";
+            htmlOutput+=letter+" ";
+            excelOutput+=letter+"\t";
+        }
+        htmlOutput+="<br>";
+        excelOutput+="\n";
+    }
+    document.getElementById("grid").innerHTML=htmlOutput;
+    document.getElementById("excel").value=excelOutput;
 }
 </script>
 
