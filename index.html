@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="nl">
 <head>
@@ -33,7 +34,7 @@ body{
 
 <h2>Woordzoeker Generator</h2>
 
-<textarea id="words" rows="12" cols="30">
+<textarea id="words" rows="15" cols="30">
 REY
 CUENTAS
 SALIENDO
@@ -91,7 +92,6 @@ YO
 </textarea>
 
 <br><br>
-
 <button onclick="generate()">Genereer puzzel</button>
 
 <div id="grid"></div>
@@ -99,32 +99,48 @@ YO
 <script>
 
 const size = 15
+const maxAttempts = 5000
 
 function generate(){
-
-let grid = Array.from({length:size},()=>Array(size).fill(""))
 
 let words = document.getElementById("words").value
 .split("\n")
 .map(w=>w.trim())
 .filter(w=>w.length>0)
 
+let totalLetters = words.reduce((sum,w)=>sum+w.length,0)
+
+if(totalLetters !== size*size){
+alert("Aantal letters is "+totalLetters+" maar het raster heeft "+(size*size)+" vakjes.")
+return
+}
+
 words.sort((a,b)=>b.length-a.length)
+
+let attempts = 0
+let success = false
+let grid
+
+while(!success && attempts < maxAttempts){
+
+attempts++
+
+grid = Array.from({length:size},()=>Array(size).fill(""))
+success = true
 
 for(let word of words){
 
 let placed = false
 
-for(let attempt=0;attempt<1000 && !placed;attempt++){
+for(let tryPos=0;tryPos<2000 && !placed;tryPos++){
 
 let dir = Math.random()<0.5 ? "H" : "V"
-
 let row = Math.floor(Math.random()*size)
 let col = Math.floor(Math.random()*size)
 
 if(dir==="H" && col+word.length<=size){
 
-let fits = true
+let fits=true
 
 for(let i=0;i<word.length;i++){
 if(grid[row][col+i]!="") fits=false
@@ -141,7 +157,7 @@ placed=true
 
 if(dir==="V" && row+word.length<=size){
 
-let fits = true
+let fits=true
 
 for(let i=0;i<word.length;i++){
 if(grid[row+i][col]!="") fits=false
@@ -158,6 +174,18 @@ placed=true
 
 }
 
+if(!placed){
+success=false
+break
+}
+
+}
+
+}
+
+if(!success){
+alert("Geen oplossing gevonden na "+maxAttempts+" pogingen.")
+return
 }
 
 draw(grid)
@@ -187,3 +215,4 @@ container.appendChild(cell)
 
 </body>
 </html>
+```
