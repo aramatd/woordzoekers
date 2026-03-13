@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>Woordzoeker Generator 1747</title>
+<title>Woordzoeker Generator</title>
 <style>
 body{
   font-family: monospace;
@@ -11,10 +11,6 @@ body{
   margin-top:20px;
   line-height:1.6;
   font-size:20px;
-}
-.solution{
-  color:red;
-  font-weight:bold;
 }
 textarea{
   margin-top:10px;
@@ -58,67 +54,38 @@ CADA
 UNO
 DIEZ
 YO
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
-@
 </textarea>
 
 <br><br>
 <button onclick="generate()">Genereer puzzel</button>
 
 <div id="grid"></div>
+<p id="emptyCount"></p>
+
 <h3>Excel-versie (kopiëren)</h3>
 <textarea id="excel" rows="20" cols="60"></textarea>
 
 <script>
-const size = 15;
+const size = 15;  // pas aan als je een kleiner/groter raster wilt
 const maxAttempts = 5000;
-const solution = "PERDONAISDETODOCORAZON";
 
 function generate() {
   let words = document.getElementById("words").value
     .split("\n")
-    .map(w => w.trim())
+    .map(w => w.trim().toUpperCase())
     .filter(w => w.length>0);
 
-  let totalLetters = words.reduce((sum,w)=>sum+w.length,0);
-  if(totalLetters !== size*size){
-    alert("Aantal letters is "+totalLetters+" maar het raster heeft "+(size*size)+" vakjes.");
-    return;
-  }
-
   // Lange woorden eerst
-  words.sort((a,b)=>b.length - a.length);
+  words.sort((a,b)=>b.length-a.length);
 
   let attempts = 0;
   let success=false;
   let grid;
-  let solutionCells;
 
   while(!success && attempts<maxAttempts){
     attempts++;
     grid = Array.from({length:size},()=>Array(size).fill(""));
-    solutionCells = Array.from({length:size},()=>Array(size).fill(false));
-    success=true;
+    success = true;
 
     for(let word of words){
       let placed=false;
@@ -127,29 +94,37 @@ function generate() {
       directions = directions.sort(()=>Math.random()-0.5);
 
       for(let dir of directions){
-        // random startpositie
+        // willekeurige startpositie
         let row=Math.floor(Math.random()*size);
         let col=Math.floor(Math.random()*size);
         let len = word.length;
 
         if(dir==="H" && col+len<=size){
           let fits=true;
-          for(let i=0;i<len;i++){if(grid[row][col+i]!="") fits=false}
+          for(let i=0;i<len;i++){
+            if(grid[row][col+i]!=="") fits=false;
+          }
           if(fits){for(let i=0;i<len;i++){grid[row][col+i]=word[i]} placed=true; break;}
 
         } else if(dir==="V" && row+len<=size){
           let fits=true;
-          for(let i=0;i<len;i++){if(grid[row+i][col]!="") fits=false}
+          for(let i=0;i<len;i++){
+            if(grid[row+i][col]!=="") fits=false;
+          }
           if(fits){for(let i=0;i<len;i++){grid[row+i][col]=word[i]} placed=true; break;}
 
         } else if(dir==="D1" && row+len<=size && col+len<=size){ // diag TL->BR
           let fits=true;
-          for(let i=0;i<len;i++){if(grid[row+i][col+i]!="") fits=false}
+          for(let i=0;i<len;i++){
+            if(grid[row+i][col+i]!=="") fits=false;
+          }
           if(fits){for(let i=0;i<len;i++){grid[row+i][col+i]=word[i]} placed=true; break;}
 
         } else if(dir==="D2" && row+len<=size && col-len+1>=0){ // diag TR->BL
           let fits=true;
-          for(let i=0;i<len;i++){if(grid[row+i][col-i]!="") fits=false}
+          for(let i=0;i<len;i++){
+            if(grid[row+i][col-i]!=="") fits=false;
+          }
           if(fits){for(let i=0;i<len;i++){grid[row+i][col-i]=word[i]} placed=true; break;}
         }
       }
@@ -160,40 +135,27 @@ function generate() {
 
   if(!success){alert("Geen oplossing gevonden na "+maxAttempts+" pogingen."); return;}
 
-  fillSolution(grid,solutionCells);
-  draw(grid,solutionCells);
+  draw(grid);
 }
 
-function fillSolution(grid,solutionCells){
-  let letters = solution.split("");
-  let index=0;
-  for(let r=0;r<size;r++){
-    for(let c=0;c<size;c++){
-      if(grid[r][c]==="@"){
-        grid[r][c]=letters[index];
-        solutionCells[r][c]=true;
-        index++;
-      }
-    }
-  }
-}
-
-function draw(grid,solutionCells){
+function draw(grid){
   let htmlOutput="", excelOutput="";
+  let emptyCount = 0;
   for(let r=0;r<size;r++){
     for(let c=0;c<size;c++){
-      let letter = grid[r][c];
-      if(solutionCells[r][c]){htmlOutput+="<span class='solution'>"+letter+"</span>";}
-      else{htmlOutput+=letter;}
-      excelOutput+=letter;
-      if(c<size-1){htmlOutput+=" "; excelOutput+="\t";}
+      let letter = grid[r][c] || "_"; // lege vakjes als _
+      if(grid[r][c]==="") emptyCount++;
+      htmlOutput+=letter+" ";
+      excelOutput+=letter+"\t";
     }
     htmlOutput+="<br>";
     excelOutput+="\n";
   }
   document.getElementById("grid").innerHTML=htmlOutput;
   document.getElementById("excel").value=excelOutput;
+  document.getElementById("emptyCount").innerText="Aantal lege vakjes: "+emptyCount;
 }
 </script>
+
 </body>
 </html>
