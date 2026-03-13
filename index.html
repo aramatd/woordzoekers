@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="nl">
 <head>
@@ -12,15 +11,18 @@ font-family: monospace;
 }
 
 #grid{
-white-space: pre;
-font-size:20px;
-line-height:1.6;
 margin-top:20px;
+line-height:1.6;
+font-size:20px;
 }
 
 .solution{
 color:red;
 font-weight:bold;
+}
+
+textarea{
+margin-top:10px;
 }
 
 </style>
@@ -92,6 +94,10 @@ YO
 <button onclick="generate()">Genereer puzzel</button>
 
 <div id="grid"></div>
+
+<h3>Excel-versie (kopiëren)</h3>
+
+<textarea id="excel" rows="20" cols="60"></textarea>
 
 <script>
 
@@ -207,6 +213,7 @@ if(grid[r][c] === "@"){
 grid[r][c] = letters[index]
 solutionCells[r][c] = true
 index++
+
 }
 
 }
@@ -216,30 +223,38 @@ index++
 
 function draw(grid,solutionCells){
 
-let output=""
+let htmlOutput=""
+let excelOutput=""
 
 for(let r=0;r<size;r++){
 
 for(let c=0;c<size;c++){
 
+let letter = grid[r][c]
+
 if(solutionCells[r][c]){
-output += "<span class='solution'>"+grid[r][c]+"</span> "
+htmlOutput += "<span class='solution'>" + letter + "</span>"
 }else{
-output += grid[r][c] + " "
+htmlOutput += letter
+}
+
+excelOutput += letter
+
+if(c < size-1){
+htmlOutput += " "
+excelOutput += "\t"
 }
 
 }
 
-output += "\n"
+htmlOutput += "<br>"
+excelOutput += "\n"
 
 }
 
-document.getElementById("grid").innerHTML = output
+document.getElementById("grid").innerHTML = htmlOutput
+document.getElementById("excel").value = excelOutput
 
 }
 
 </script>
-
-</body>
-</html>
-```
