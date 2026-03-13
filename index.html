@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>Woordzoeker Generator – Stabiel</title>
+<title>Woordzoeker Generator – Diagonaal langs rand</title>
 <style>
 body { font-family: monospace; }
 #grid { margin-top:20px; line-height:1.6; font-size:20px; }
@@ -12,7 +12,7 @@ textarea { margin-top:10px; width: 400px; }
 </head>
 <body>
 
-<h2>Woordzoeker Generator – Stabiel</h2>
+<h2>Woordzoeker Generator – Diagonaal langs rand</h2>
 
 <h3>1. Woordenlijst</h3>
 <textarea id="words" rows="15">REY
@@ -66,6 +66,7 @@ YO</textarea>
 <script>
 const minRows = 10;
 const minCols = 10;
+const maxDiagWords = 5;
 
 function shuffle(array){return array.sort(()=>Math.random()-0.5);}
 function createGrid(rows,cols){return Array.from({length:rows},()=>Array(cols).fill(""));}
@@ -108,32 +109,37 @@ function generate(){
         "Totaal letters woordenlijst: "+totalWordLetters+"<br>"+
         "Totaal letters verborgen boodschap: "+hiddenLength;
 
-    // Raster berekenen (iets groter dan totaal letters)
+    // Raster berekenen
     let estSide=Math.ceil(Math.sqrt(totalWordLetters+hiddenLength)*1.1);
     let rows=Math.max(minRows, estSide);
     let cols=Math.max(minCols, estSide);
     let grid=createGrid(rows,cols);
 
-    // Plaats diagonaal eerst (eerste 5 woorden)
-    for(let i=0;i<Math.min(5,words.length);i++){
-        let word=words[i];
+    // Sorteer woorden op lengte voor diagonaal (kortste kiezen)
+    let diagWords = words.slice().sort((a,b)=>a.length-b.length).slice(0,Math.min(maxDiagWords,words.length));
+
+    // Plaats diagonaal langs rand
+    for(let i=0;i<diagWords.length;i++){
+        let word = diagWords[i];
         let placed=false;
         let attempts=0;
         while(!placed && attempts<200){
             attempts++;
-            let dir=(i%2===0)?[1,1]:[1,-1];
-            let r=Math.floor(Math.random()*(rows-word.length));
-            let c=Math.floor(Math.random()*(cols-word.length));
-            if(canPlace(grid,word,r,c,dir[0],dir[1])){
-                placeWord(grid,word,r,c,dir[0],dir[1]);
+            let rInc = 1;
+            let cInc = (i%2===0)?1:-1; // D1 of D2
+            let r = (i<Math.ceil(diagWords.length/2))? 0 : rows-word.length; // boven of onder rand
+            let c = (cInc===1)? 0 : cols-word.length; // linker of rechter rand
+            if(canPlace(grid,word,r,c,rInc,cInc)){
+                placeWord(grid,word,r,c,rInc,cInc);
                 placed=true;
             }
         }
     }
 
-    // Plaats rest afwisselend horizontaal/verticaal
-    for(let i=5;i<words.length;i++){
-        let word=words[i];
+    // Plaats overige woorden horizontaal/verticaal
+    let remainingWords = words.filter(w=>!diagWords.includes(w));
+    for(let i=0;i<remainingWords.length;i++){
+        let word=remainingWords[i];
         let placed=false;
         let attempts=0;
         while(!placed && attempts<500){
