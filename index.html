@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>Woordzoeker Generator (Backtracking)</title>
+<title>Woordzoeker Generator (Adaptive)</title>
 <style>
 body { font-family: monospace; }
 #grid { margin-top:20px; line-height:1.6; font-size:20px; }
@@ -12,7 +12,7 @@ textarea { margin-top:10px; width: 400px; }
 </head>
 <body>
 
-<h2>Woordzoeker Generator (Backtracking)</h2>
+<h2>Woordzoeker Generator (Adaptive)</h2>
 
 <h3>1. Woordenlijst</h3>
 <textarea id="words" rows="15">REY
@@ -66,8 +66,6 @@ YO</textarea>
 <script>
 const minRows = 7;
 const minCols = 7;
-
-// Richtingen: [rij-increment, kolom-increment]
 const DIRS = {
     "H":[0,1],
     "V":[1,0],
@@ -98,20 +96,19 @@ function generate() {
         "Totaal letters woordenlijst: " + totalWordLetters +
         "<br>Totaal letters verborgen boodschap: " + hiddenLength;
 
-    // Bepaal rastergrootte: zo klein mogelijk maar ≥ minRows/minCols
+    // Start rastergrootte
     let estSide = Math.ceil(Math.sqrt(totalWordLetters)*0.9);
     let rows = Math.max(minRows, estSide);
     let cols = Math.max(minCols, estSide);
 
-    // Raster leegmaken
     let grid = Array.from({length: rows}, ()=>Array(cols).fill(""));
 
-    // Plaatsingsfunctie
+    // Plaatsingsfuncties
     function canPlace(word, row, col, dir) {
         let [rInc,cInc] = DIRS[dir];
         for(let j=0;j<word.length;j++){
-            let r = row + j*rInc;
-            let c = col + j*cInc;
+            let r = row+j*rInc;
+            let c = col+j*cInc;
             if(r<0 || r>=rows || c<0 || c>=cols) return false;
             if(grid[r][c]!="" && grid[r][c]!==word[j]) return false;
         }
@@ -128,12 +125,11 @@ function generate() {
     function removeWord(word, row, col, dir){
         let [rInc,cInc] = DIRS[dir];
         for(let j=0;j<word.length;j++){
-            let r = row+j*rInc, c=col+j*cInc;
-            // Alleen verwijderen als dit niet kruist met een ander woord
-            let letter = word[j];
-            let shared = false;
+            let r=row+j*rInc, c=col+j*cInc;
+            // Alleen verwijderen als niet gedeeld
+            let letter=word[j], shared=false;
             for(let d in DIRS){
-                let [dr,dc] = DIRS[d];
+                let [dr,dc]=DIRS[d];
                 let nr=r-dr,nc=c-dc;
                 if(nr>=0 && nr<rows && nc>=0 && nc<cols){
                     if(grid[nr][nc]===letter) shared=true;
@@ -143,17 +139,12 @@ function generate() {
         }
     }
 
-    // Backtracking functie
+    // Backtracking
     let placedAll=false;
     function backtrack(index){
         if(index>=words.length){
-            // Check lege vakjes ≤ verborgen boodschap
             let empty=grid.flat().filter(v=>v==="").length;
-            if(empty<=hiddenLength){
-                placedAll=true;
-                return true;
-            }
-            return false;
+            return empty<=hiddenLength;
         }
 
         let word=words[index];
@@ -175,15 +166,26 @@ function generate() {
         return false;
     }
 
-    let success = backtrack(0);
+    // **Adaptive raster verkleinen**
+    let success=false;
+    while(!success){
+        grid = Array.from({length: rows}, ()=>Array(cols).fill(""));
+        success=backtrack(0);
+        if(!success){
+            // probeer raster 1 kleiner in rijen of kolommen, minimaal minRows/minCols
+            if(rows>minRows) rows--;
+            else if(cols>minCols) cols--;
+            else break; // kan niet kleiner
+        }
+    }
+
     if(!success){
-        alert("Kon geen oplossing vinden met ≤ " + hiddenLength + " lege vakjes. Probeer raster groter of woordenlijst korter.");
+        alert("Kon geen oplossing vinden binnen de limiet. Probeer woordenlijst korter of verborgen boodschap kleiner.");
         return;
     }
 
-    // Tellen lege vakjes
+    // Lege vakjes
     let emptyCount=grid.flat().filter(v=>v==="").length;
-
     document.getElementById("emptyCount").innerText=
         "Aantal lege vakjes: "+emptyCount+
         " | Letters verborgen boodschap: "+hiddenLength+
