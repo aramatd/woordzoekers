@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="nl">
 <head>
@@ -92,6 +91,7 @@ YO
 </textarea>
 
 <br><br>
+
 <button onclick="generate()">Genereer puzzel</button>
 
 <div id="grid"></div>
@@ -100,6 +100,7 @@ YO
 
 const size = 15
 const maxAttempts = 5000
+const solution = "PERDONAISDETODOCORAZON"
 
 function generate(){
 
@@ -188,7 +189,28 @@ alert("Geen oplossing gevonden na "+maxAttempts+" pogingen.")
 return
 }
 
+fillSolution(grid)
+
 draw(grid)
+
+}
+
+function fillSolution(grid){
+
+let letters = solution.split("")
+let index = 0
+
+for(let r=0;r<size;r++){
+for(let c=0;c<size;c++){
+
+if(grid[r][c] === "@"){
+grid[r][c] = letters[index]
+index++
+
+}
+
+}
+}
 
 }
 
@@ -215,4 +237,3 @@ container.appendChild(cell)
 
 </body>
 </html>
-```
