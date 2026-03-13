@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>Woordzoeker Generator</title>
+<title>Woordzoeker Generator – Stabiel</title>
 <style>
 body { font-family: monospace; }
 #grid { margin-top:20px; line-height:1.6; font-size:20px; }
@@ -12,7 +12,7 @@ textarea { margin-top:10px; width: 400px; }
 </head>
 <body>
 
-<h2>Woordzoeker Generator</h2>
+<h2>Woordzoeker Generator – Stabiel</h2>
 
 <h3>1. Woordenlijst</h3>
 <textarea id="words" rows="15">REY
@@ -64,16 +64,13 @@ YO</textarea>
 <textarea id="excel" rows="20" cols="60"></textarea>
 
 <script>
-const maxEmpty = 22;
-const minRows = 7;
-const minCols = 7;
-const DIRS = { H:[0,1], V:[1,0], D1:[1,1], D2:[1,-1] };
+const minRows = 10;
+const minCols = 10;
 
 function shuffle(array){return array.sort(()=>Math.random()-0.5);}
 function createGrid(rows,cols){return Array.from({length:rows},()=>Array(cols).fill(""));}
 
-function canPlace(grid, word, r, c, dir){
-    let [rInc,cInc]=DIRS[dir];
+function canPlace(grid,word,r,c,rInc,cInc){
     for(let i=0;i<word.length;i++){
         let rr=r+i*rInc, cc=c+i*cInc;
         if(rr<0||rr>=grid.length||cc<0||cc>=grid[0].length) return false;
@@ -82,21 +79,20 @@ function canPlace(grid, word, r, c, dir){
     return true;
 }
 
-function placeWord(grid, word, r, c, dir){
-    let [rInc,cInc]=DIRS[dir];
+function placeWord(grid,word,r,c,rInc,cInc){
     for(let i=0;i<word.length;i++){
         grid[r+i*rInc][c+i*cInc]=word[i];
     }
 }
 
 function generate(){
-    let words = document.getElementById("words").value.split("\n").map(w=>w.trim().toUpperCase()).filter(w=>w.length>0);
-    let hidden = document.getElementById("hidden").value.replace(/\s/g,'').toUpperCase();
-    let hiddenLength = hidden.length;
+    let words=document.getElementById("words").value.split("\n").map(w=>w.trim().toUpperCase()).filter(w=>w.length>0);
+    let hidden=document.getElementById("hidden").value.replace(/\s/g,'').toUpperCase();
+    let hiddenLength=hidden.length;
 
     // Groeperen op lengte
-    let groups = {};
-    let totalWordLetters = 0;
+    let groups={};
+    let totalWordLetters=0;
     words.forEach(w=>{
         totalWordLetters+=w.length;
         if(!groups[w.length]) groups[w.length]=[];
@@ -112,68 +108,56 @@ function generate(){
         "Totaal letters woordenlijst: "+totalWordLetters+"<br>"+
         "Totaal letters verborgen boodschap: "+hiddenLength;
 
-    // Init raster
-    let estSide = Math.ceil(Math.sqrt(totalWordLetters)*1.1);
-    let rows = Math.max(minRows, estSide);
-    let cols = Math.max(minCols, estSide);
-    let grid = createGrid(rows,cols);
-    
-    // Plaats diagonaal eerst (eerste 5)
+    // Raster berekenen (iets groter dan totaal letters)
+    let estSide=Math.ceil(Math.sqrt(totalWordLetters+hiddenLength)*1.1);
+    let rows=Math.max(minRows, estSide);
+    let cols=Math.max(minCols, estSide);
+    let grid=createGrid(rows,cols);
+
+    // Plaats diagonaal eerst (eerste 5 woorden)
     for(let i=0;i<Math.min(5,words.length);i++){
-        let word = words[i];
+        let word=words[i];
         let placed=false;
         let attempts=0;
-        while(!placed && attempts<100){
+        while(!placed && attempts<200){
             attempts++;
-            let dir = i%2===0?"D1":"D2";
-            let r = Math.floor(Math.random()*(rows-word.length));
-            let c = Math.floor(Math.random()*(cols-word.length));
-            if(canPlace(grid,word,r,c,dir)){
-                placeWord(grid,word,r,c,dir);
+            let dir=(i%2===0)?[1,1]:[1,-1];
+            let r=Math.floor(Math.random()*(rows-word.length));
+            let c=Math.floor(Math.random()*(cols-word.length));
+            if(canPlace(grid,word,r,c,dir[0],dir[1])){
+                placeWord(grid,word,r,c,dir[0],dir[1]);
                 placed=true;
             }
         }
-        if(!placed) alert("Kon diagonaal woord '"+word+"' niet plaatsen");
     }
 
     // Plaats rest afwisselend horizontaal/verticaal
     for(let i=5;i<words.length;i++){
-        let word = words[i];
+        let word=words[i];
         let placed=false;
-        let directions = (i%2===0)?["H","V"]:["V","H"];
         let attempts=0;
-        while(!placed && attempts<1000){
+        while(!placed && attempts<500){
             attempts++;
-            let dir = directions[attempts%directions.length];
-            let r = Math.floor(Math.random()*(rows-(dir==="V"?word.length:0)));
-            let c = Math.floor(Math.random()*(cols-(dir==="H"?word.length:0)));
-            if(canPlace(grid,word,r,c,dir)){
-                placeWord(grid,word,r,c,dir);
+            let rInc=(i%2===0)?0:1;
+            let cInc=(i%2===0)?1:0;
+            let r=Math.floor(Math.random()*(rows-(rInc?word.length:0)));
+            let c=Math.floor(Math.random()*(cols-(cInc?word.length:0)));
+            if(canPlace(grid,word,r,c,rInc,cInc)){
+                placeWord(grid,word,r,c,rInc,cInc);
                 placed=true;
             }
         }
-        if(!placed) alert("Kon horizontaal/verticaal woord '"+word+"' niet plaatsen");
     }
 
-    // Check aantal lege vakjes
-    let emptyCount = grid.flat().filter(v=>v==="").length;
-    if(emptyCount>maxEmpty){
-        // Raster verkleinen en opnieuw proberen
-        while(emptyCount>maxEmpty && rows>minRows && cols>minCols){
-            rows--; cols--;
-            grid=createGrid(rows,cols);
-            emptyCount = grid.flat().filter(v=>v==="").length;
-        }
-    }
-
+    // Tellen lege vakjes
+    let emptyCount=grid.flat().filter(v=>v==="").length;
     document.getElementById("emptyCount").innerText=
         "Aantal lege vakjes: "+emptyCount+
-        " | Max "+maxEmpty+
         " | Letters verborgen boodschap: "+hiddenLength+
         " | Letters handmatig toevoegen: "+Math.max(0,hiddenLength-emptyCount);
 
     // Toon raster
-    let htmlOutput="", excelOutput="";
+    let htmlOutput="",excelOutput="";
     for(let r=0;r<rows;r++){
         for(let c=0;c<cols;c++){
             let letter=grid[r][c]||"_";
@@ -187,5 +171,6 @@ function generate(){
     document.getElementById("excel").value=excelOutput;
 }
 </script>
+
 </body>
 </html>
