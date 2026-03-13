@@ -69,11 +69,9 @@ const minRows = 7;
 const minCols = 7;
 
 function generate() {
-    // Woordenlijst
     let words = document.getElementById("words").value.split("\n")
         .map(w => w.trim().toUpperCase()).filter(w=>w.length>0);
 
-    // Verborgen boodschap
     let hidden = document.getElementById("hidden").value.replace(/\s/g,'').toUpperCase();
     let hiddenLength = hidden.length;
 
@@ -95,21 +93,21 @@ function generate() {
     document.getElementById('totals').innerHTML = "Totaal aantal letters in woordenlijst: " + totalWordLetters +
         "<br>Totaal aantal letters in verborgen boodschap: " + hiddenLength;
 
-    // Bepaal rasterafmetingen (minder vakjes dan totaal letters)
+    // Rastergrootte automatisch kiezen: net genoeg vakjes
     let totalLetters = totalWordLetters + hiddenLength;
-    let rows = Math.max(minRows, Math.floor(Math.sqrt(totalLetters)*0.9));
-    let cols = Math.max(minCols, Math.floor(Math.sqrt(totalLetters)*0.9));
-
+    let estSide = Math.ceil(Math.sqrt(totalLetters * 0.95)); // iets kleiner dan totaal
+    let rows = Math.max(minRows, estSide);
+    let cols = Math.max(minCols, estSide);
     let grid = Array.from({length: rows}, ()=>Array(cols).fill(""));
 
-    // Plaatsing: eerste 5 diagonaal
+    // Woorden plaatsen
     let wordIndex = 0;
     for(let i=0;i<words.length;i++){
         let word = words[i];
         let placed = false;
         let directions = [];
-        if(wordIndex<5) directions = ["D1","D2"]; // eerst 5 diagonaal
-        else directions = (wordIndex%2===0) ? ["H"] : ["V"]; // daarna afwisselend
+        if(wordIndex<5) directions = ["D1","D2"];
+        else directions = (wordIndex%2===0) ? ["H"] : ["V"];
         directions = directions.sort(()=>Math.random()-0.5);
 
         for(let dir of directions){
@@ -134,14 +132,14 @@ function generate() {
                     }
                     if(fits){for(let j=0;j<len;j++){grid[row+j][col]=word[j];} placed=true;}
 
-                } else if(dir==="D1" && row+len<=rows && col+len<=cols){ // TL->BR
+                } else if(dir==="D1" && row+len<=rows && col+len<=cols){ 
                     let fits=true;
                     for(let j=0;j<len;j++){
                         if(grid[row+j][col+j]!=="") fits=false;
                     }
                     if(fits){for(let j=0;j<len;j++){grid[row+j][col+j]=word[j];} placed=true;}
 
-                } else if(dir==="D2" && row+len<=rows && col-len+1>=0){ // TR->BL
+                } else if(dir==="D2" && row+len<=rows && col-len+1>=0){
                     let fits=true;
                     for(let j=0;j<len;j++){
                         if(grid[row+j][col-j]!=="") fits=false;
@@ -161,7 +159,7 @@ function generate() {
         }
     }
 
-    // Maximaal aantal lege vakjes = aantal letters verborgen boodschap
+    // Maximaal aantal lege vakjes = letters verborgen boodschap
     let maxEmpty = Math.min(emptyCount, hiddenLength);
     let lettersToAdd = Math.max(0, hiddenLength - emptyCount);
 
