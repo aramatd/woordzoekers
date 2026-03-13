@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>Woordzoeker Generator – Max 22 lege vakjes</title>
+<title>Woordzoeker Generator</title>
 <style>
 body { font-family: monospace; }
 #grid { margin-top:20px; line-height:1.6; font-size:20px; }
@@ -12,7 +12,7 @@ textarea { margin-top:10px; width: 400px; }
 </head>
 <body>
 
-<h2>Woordzoeker Generator – Max 22 lege vakjes</h2>
+<h2>Woordzoeker Generator</h2>
 
 <h3>1. Woordenlijst</h3>
 <textarea id="words" rows="15">REY
@@ -64,34 +64,28 @@ YO</textarea>
 <textarea id="excel" rows="20" cols="60"></textarea>
 
 <script>
+const maxEmpty = 22;
 const minRows = 7;
 const minCols = 7;
-const maxEmpty = 22;
 const DIRS = { H:[0,1], V:[1,0], D1:[1,1], D2:[1,-1] };
 
-// Hulpfuncties
 function shuffle(array){return array.sort(()=>Math.random()-0.5);}
 function createGrid(rows,cols){return Array.from({length:rows},()=>Array(cols).fill(""));}
 
-// Kan woord geplaatst worden?
-function canPlace(grid, word, row, col, dir){
+function canPlace(grid, word, r, c, dir){
     let [rInc,cInc]=DIRS[dir];
-    for(let j=0;j<word.length;j++){
-        let r=row+j*rInc, c=col+j*cInc;
-        if(r<0||r>=grid.length||c<0||c>=grid[0].length) return false;
-        if(grid[r][c]!="" && grid[r][c]!==word[j]) return false;
+    for(let i=0;i<word.length;i++){
+        let rr=r+i*rInc, cc=c+i*cInc;
+        if(rr<0||rr>=grid.length||cc<0||cc>=grid[0].length) return false;
+        if(grid[rr][cc]!="" && grid[rr][cc]!==word[i]) return false;
     }
     return true;
 }
-function placeWord(grid, word,row,col,dir){
+
+function placeWord(grid, word, r, c, dir){
     let [rInc,cInc]=DIRS[dir];
-    for(let j=0;j<word.length;j++) grid[row+j*rInc][col+j*cInc]=word[j];
-}
-function removeWord(grid, word,row,col,dir){
-    let [rInc,cInc]=DIRS[dir];
-    for(let j=0;j<word.length;j++){
-        let r=row+j*rInc,c=col+j*cInc;
-        grid[r][c]=""; // geen complex shared logic, laat vakjes leeg
+    for(let i=0;i<word.length;i++){
+        grid[r+i*rInc][c+i*cInc]=word[i];
     }
 }
 
@@ -102,81 +96,81 @@ function generate(){
 
     // Groeperen op lengte
     let groups = {};
-    let totalWordLetters=0;
+    let totalWordLetters = 0;
     words.forEach(w=>{
         totalWordLetters+=w.length;
         if(!groups[w.length]) groups[w.length]=[];
         groups[w.length].push(w);
     });
-    let groupHtml='';
+
+    let groupHtml="";
     Object.keys(groups).sort((a,b)=>a-b).forEach(len=>{
         groupHtml+=len+' letters: '+groups[len].join(', ')+'<br>';
     });
     document.getElementById('wordGroups').innerHTML=groupHtml;
     document.getElementById('totals').innerHTML=
-        "Totaal letters woordenlijst: "+totalWordLetters+
-        "<br>Totaal letters verborgen boodschap: "+hiddenLength;
+        "Totaal letters woordenlijst: "+totalWordLetters+"<br>"+
+        "Totaal letters verborgen boodschap: "+hiddenLength;
 
-    // Start rastergrootte
+    // Init raster
     let estSide = Math.ceil(Math.sqrt(totalWordLetters)*1.1);
     let rows = Math.max(minRows, estSide);
     let cols = Math.max(minCols, estSide);
-
-    let success=false;
-    while(!success){
-        let grid=createGrid(rows,cols);
-
-        // Plaatsen via backtracking met random startpunten
-        function backtrack(index){
-            if(index>=words.length){
-                let emptyCount = grid.flat().filter(v=>v==="").length;
-                return emptyCount <= maxEmpty;
+    let grid = createGrid(rows,cols);
+    
+    // Plaats diagonaal eerst (eerste 5)
+    for(let i=0;i<Math.min(5,words.length);i++){
+        let word = words[i];
+        let placed=false;
+        let attempts=0;
+        while(!placed && attempts<100){
+            attempts++;
+            let dir = i%2===0?"D1":"D2";
+            let r = Math.floor(Math.random()*(rows-word.length));
+            let c = Math.floor(Math.random()*(cols-word.length));
+            if(canPlace(grid,word,r,c,dir)){
+                placeWord(grid,word,r,c,dir);
+                placed=true;
             }
-
-            let word = words[index];
-            let directions = index<5?["D1","D2"]:(index%2===0?["H","V"]:["V","H"]);
-            directions = shuffle(directions);
-
-            // Maak lijst van alle mogelijke startpunten en shuffle
-            let possiblePositions=[];
-            for(let r=0;r<rows;r++){
-                for(let c=0;c<cols;c++){
-                    possiblePositions.push([r,c]);
-                }
-            }
-            possiblePositions=shuffle(possiblePositions);
-
-            for(let dir of directions){
-                for(let [r,c] of possiblePositions){
-                    if(canPlace(grid,word,r,c,dir)){
-                        placeWord(grid,word,r,c,dir);
-                        if(backtrack(index+1)) return true;
-                        removeWord(grid,word,r,c,dir);
-                    }
-                }
-            }
-            return false;
         }
-
-        success=backtrack(0);
-        if(!success){
-            if(rows>minRows) rows--;
-            else if(cols>minCols) cols--;
-            else break;
-        }
+        if(!placed) alert("Kon diagonaal woord '"+word+"' niet plaatsen");
     }
 
-    if(!success){
-        alert("Kon geen oplossing vinden binnen max "+maxEmpty+" lege vakjes.");
-        return;
+    // Plaats rest afwisselend horizontaal/verticaal
+    for(let i=5;i<words.length;i++){
+        let word = words[i];
+        let placed=false;
+        let directions = (i%2===0)?["H","V"]:["V","H"];
+        let attempts=0;
+        while(!placed && attempts<1000){
+            attempts++;
+            let dir = directions[attempts%directions.length];
+            let r = Math.floor(Math.random()*(rows-(dir==="V"?word.length:0)));
+            let c = Math.floor(Math.random()*(cols-(dir==="H"?word.length:0)));
+            if(canPlace(grid,word,r,c,dir)){
+                placeWord(grid,word,r,c,dir);
+                placed=true;
+            }
+        }
+        if(!placed) alert("Kon horizontaal/verticaal woord '"+word+"' niet plaatsen");
     }
 
+    // Check aantal lege vakjes
     let emptyCount = grid.flat().filter(v=>v==="").length;
+    if(emptyCount>maxEmpty){
+        // Raster verkleinen en opnieuw proberen
+        while(emptyCount>maxEmpty && rows>minRows && cols>minCols){
+            rows--; cols--;
+            grid=createGrid(rows,cols);
+            emptyCount = grid.flat().filter(v=>v==="").length;
+        }
+    }
+
     document.getElementById("emptyCount").innerText=
         "Aantal lege vakjes: "+emptyCount+
         " | Max "+maxEmpty+
         " | Letters verborgen boodschap: "+hiddenLength+
-        " | Letters die handmatig toevoegen: "+Math.max(0,hiddenLength-emptyCount);
+        " | Letters handmatig toevoegen: "+Math.max(0,hiddenLength-emptyCount);
 
     // Toon raster
     let htmlOutput="", excelOutput="";
@@ -193,6 +187,5 @@ function generate(){
     document.getElementById("excel").value=excelOutput;
 }
 </script>
-
 </body>
 </html>
