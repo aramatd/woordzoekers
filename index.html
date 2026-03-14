@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>Woordzoeker – Max lege vakjes slim</title>
+<title>Woordzoeker Generator – Slim</title>
 <style>
 body { font-family: monospace; }
 #grid { margin-top:20px; line-height:1.6; font-size:20px; }
@@ -165,14 +165,63 @@ function generate(){
     // 3. Werkelijk aantal lege vakjes tellen
     let actualEmptyCount=grid.flat().filter(v=>v==="").length;
 
-    // 4. Beperk lege vakjes tot hiddenLength door extra letters te vullen
+    // 4. Controle: aantal lege vakjes mag nooit groter zijn dan verborgen boodschap
+    // Alleen lege vakjes tonen, geen X
     if(actualEmptyCount>hiddenLength){
-        for(let r=0;r<rows;r++){
-            for(let c=0;c<cols;c++){
-                if(grid[r][c]==="" && actualEmptyCount>hiddenLength){
-                    grid[r][c]="X"; // vul met tijdelijke letter, bijv. X
-                    actualEmptyCount--;
+        // Probeer raster kleiner maken en opnieuw plaatsen
+        let success=false;
+        for(let shrink=1; shrink<=5; shrink++){
+            let newRows=Math.max(minRows, rows-shrink);
+            let newCols=Math.max(minCols, cols-shrink);
+            let newGrid=createGrid(newRows,newCols);
+            // herplaats diagonaal + horizontaal/verticaal
+            let placedAll=true;
+            // Diagonaal
+            for(let i=0;i<diagWords.length;i++){
+                let word=diagWords[i], placed=false;
+                for(let r=0;r<=newRows-word.length && !placed;r++){
+                    for(let c=0;c<=newCols-word.length && !placed;c++){
+                        let rInc=1;
+                        let cInc=(i%2===0)?1:-1;
+                        if(canPlace(newGrid,word,r,c,rInc,cInc)){
+                            placeWord(newGrid,word,r,c,rInc,cInc);
+                            placed=true;
+                        }
+                    }
                 }
+                if(!placed) placedAll=false;
+            }
+            // Overige
+            let remainingWords=words.filter(w=>!diagWords.includes(w));
+            for(let word of remainingWords){
+                let bestScore=-1, bestPos=null;
+                for(let r=0;r<newRows;r++){
+                    for(let c=0;c<newCols;c++){
+                        for(let [rInc,cInc] of [[0,1],[1,0]]){ 
+                            if(canPlace(newGrid,word,r,c,rInc,cInc)){
+                                let score=0;
+                                for(let i=0;i<word.length;i++){
+                                    let rr=r+i*rInc, cc=c+i*cInc;
+                                    if(newGrid[rr][cc]===word[i]) score++;
+                                }
+                                if(score>bestScore){
+                                    bestScore=score;
+                                    bestPos={r,c,rInc,cInc};
+                                }
+                            }
+                        }
+                    }
+                    if(bestPos) placeWord(newGrid,word,bestPos.r,bestPos.c,bestPos.rInc,bestPos.cInc);
+                }
+            }
+            let emptyCount=newGrid.flat().filter(v=>v==="").length;
+            if(emptyCount<=hiddenLength){
+                grid=newGrid;
+                rows=newRows;
+                cols=newCols;
+                actualEmptyCount=emptyCount;
+                success=true;
+                break;
             }
         }
     }
