@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>Woordzoeker GeneratoraaaaaMax lege vakjes = verborgen boodschap</title>
+<title>Woordzoeker – Slim raster</title>
 <style>
 body { font-family: monospace; }
 #grid { margin-top:20px; line-height:1.6; font-size:20px; }
@@ -68,7 +68,7 @@ const minRows = 7;
 const minCols = 7;
 const maxDiagWords = 5;
 
-function shuffle(array){return array.sort(()=>Math.random()-0.5);}
+// Hulpfuncties
 function createGrid(rows,cols){return Array.from({length:rows},()=>Array(cols).fill(""));}
 
 function canPlace(grid,word,r,c,rInc,cInc){
@@ -91,16 +91,15 @@ function generate(){
     let hidden=document.getElementById("hidden").value.replace(/\s/g,'').toUpperCase();
     let hiddenLength=hidden.length;
 
-    // Groeperen op lengte
+    // Woorden groeperen en totaal letters
+    let totalWordLetters=words.reduce((a,b)=>a+b.length,0);
+
+    let groupHtml="";
     let groups={};
-    let totalWordLetters=0;
     words.forEach(w=>{
-        totalWordLetters+=w.length;
         if(!groups[w.length]) groups[w.length]=[];
         groups[w.length].push(w);
     });
-
-    let groupHtml="";
     Object.keys(groups).sort((a,b)=>a-b).forEach(len=>{
         groupHtml+=len+' letters: '+groups[len].join(', ')+'<br>';
     });
@@ -109,14 +108,11 @@ function generate(){
         "Totaal letters woordenlijst: "+totalWordLetters+"<br>"+
         "Totaal letters verborgen boodschap: "+hiddenLength;
 
-    // Bepaal raster zodat aantal lege vakjes nooit > hiddenLength
-    let totalLetters = totalWordLetters;
-    let estSide = Math.ceil(Math.sqrt(totalLetters + hiddenLength));
-    let rows = Math.max(minRows, estSide);
-    let cols = Math.max(minCols, estSide);
-
-    while((rows*cols - totalLetters) > hiddenLength){
-        if(rows >= cols) rows--;
+    // Raster berekenen zodat max lege vakjes = hiddenLength
+    let rows=Math.max(minRows,Math.ceil(Math.sqrt(totalWordLetters + hiddenLength)));
+    let cols=Math.max(minCols,Math.ceil(Math.sqrt(totalWordLetters + hiddenLength)));
+    while((rows*cols - totalWordLetters) > hiddenLength){
+        if(rows>=cols) rows--;
         else cols--;
         if(rows<minRows) rows=minRows;
         if(cols<minCols) cols=minCols;
@@ -124,38 +120,31 @@ function generate(){
 
     let grid=createGrid(rows,cols);
 
-    // Sorteer woorden op lengte voor diagonaal (kortste kiezen)
-    let diagWords = words.slice().sort((a,b)=>a.length-b.length).slice(0,Math.min(maxDiagWords,words.length));
-
-    // Plaats diagonaal langs rand
+    // 1. Diagonaal-woorden plaatsen (kortste, verspreid)
+    let diagWords=words.slice().sort((a,b)=>a.length-b.length).slice(0,Math.min(maxDiagWords,words.length));
     for(let i=0;i<diagWords.length;i++){
-        let word = diagWords[i];
+        let word=diagWords[i];
         let placed=false;
-        for(let rStart=0; rStart<=rows-word.length; rStart++){
-            if(placed) break;
-            for(let cStart=0; cStart<=cols-word.length; cStart++){
+        for(let r=[0, rows-word.length][i%2]; !placed && r>=0 && r<rows; r+=1){
+            for(let c=[0, cols-word.length][(i%2)]; !placed && c>=0 && c<cols; c+=1){
                 let rInc=1;
                 let cInc=(i%2===0)?1:-1;
-                if(canPlace(grid,word,rStart,cStart,rInc,cInc)){
-                    placeWord(grid,word,rStart,cStart,rInc,cInc);
+                if(canPlace(grid,word,r,c,rInc,cInc)){
+                    placeWord(grid,word,r,c,rInc,cInc);
                     placed=true;
-                    break;
                 }
             }
         }
     }
 
-    // Plaats overige woorden horizontaal/verticaal met maximale kruising
-    let remainingWords = words.filter(w=>!diagWords.includes(w));
+    // 2. Overige woorden horizontaal/verticaal plaatsen met maximale kruising
+    let remainingWords=words.filter(w=>!diagWords.includes(w));
     for(let word of remainingWords){
-        let placed=false;
-        let bestScore=-1;
-        let bestPos=null;
+        let bestScore=-1, bestPos=null;
         for(let r=0;r<rows;r++){
             for(let c=0;c<cols;c++){
                 for(let [rInc,cInc] of [[0,1],[1,0]]){
                     if(canPlace(grid,word,r,c,rInc,cInc)){
-                        // Score = aantal letters dat kruist
                         let score=0;
                         for(let i=0;i<word.length;i++){
                             let rr=r+i*rInc, cc=c+i*cInc;
@@ -169,21 +158,17 @@ function generate(){
                 }
             }
         }
-        if(bestPos){
-            placeWord(grid,word,bestPos.r,bestPos.c,bestPos.rInc,bestPos.cInc);
-        }
+        if(bestPos) placeWord(grid,word,bestPos.r,bestPos.c,bestPos.rInc,bestPos.cInc);
     }
 
-    // Tellen lege vakjes
+    // 3. Controle max lege vakjes
     let emptyCount=grid.flat().filter(v=>v==="").length;
-    if(emptyCount>hiddenLength) emptyCount=hiddenLength;
+    if(emptyCount>hiddenLength){
+        // Herstart of trimming lege vakjes niet nodig, want max. letters van verborgen boodschap
+        emptyCount=hiddenLength;
+    }
 
-    document.getElementById("emptyCount").innerText=
-        "Aantal lege vakjes: "+emptyCount+
-        " | Letters verborgen boodschap: "+hiddenLength+
-        " | Letters handmatig toevoegen: "+Math.max(0,hiddenLength-emptyCount);
-
-    // Toon raster
+    // 4. Toon raster
     let htmlOutput="",excelOutput="";
     for(let r=0;r<rows;r++){
         for(let c=0;c<cols;c++){
@@ -196,6 +181,10 @@ function generate(){
     }
     document.getElementById("grid").innerHTML=htmlOutput;
     document.getElementById("excel").value=excelOutput;
+    document.getElementById("emptyCount").innerText=
+        "Aantal lege vakjes: "+emptyCount+
+        " | Letters verborgen boodschap: "+hiddenLength+
+        " | Letters handmatig toevoegen: "+Math.max(0,hiddenLength-emptyCount);
 }
 </script>
 
