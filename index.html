@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>Woordzoeker – Slim raster</title>
+<title>Woordzoeker – Max lege vakjes slim</title>
 <style>
 body { font-family: monospace; }
 #grid { margin-top:20px; line-height:1.6; font-size:20px; }
@@ -64,11 +64,10 @@ YO</textarea>
 <textarea id="excel" rows="20" cols="60"></textarea>
 
 <script>
-const minRows = 7;
-const minCols = 7;
-const maxDiagWords = 5;
+const minRows=7;
+const minCols=7;
+const maxDiagWords=5;
 
-// Hulpfuncties
 function createGrid(rows,cols){return Array.from({length:rows},()=>Array(cols).fill(""));}
 
 function canPlace(grid,word,r,c,rInc,cInc){
@@ -91,15 +90,16 @@ function generate(){
     let hidden=document.getElementById("hidden").value.replace(/\s/g,'').toUpperCase();
     let hiddenLength=hidden.length;
 
-    // Woorden groeperen en totaal letters
     let totalWordLetters=words.reduce((a,b)=>a+b.length,0);
 
-    let groupHtml="";
+    // Woorden groeperen op lengte
     let groups={};
     words.forEach(w=>{
         if(!groups[w.length]) groups[w.length]=[];
         groups[w.length].push(w);
     });
+
+    let groupHtml="";
     Object.keys(groups).sort((a,b)=>a-b).forEach(len=>{
         groupHtml+=len+' letters: '+groups[len].join(', ')+'<br>';
     });
@@ -108,9 +108,10 @@ function generate(){
         "Totaal letters woordenlijst: "+totalWordLetters+"<br>"+
         "Totaal letters verborgen boodschap: "+hiddenLength;
 
-    // Raster berekenen zodat max lege vakjes = hiddenLength
-    let rows=Math.max(minRows,Math.ceil(Math.sqrt(totalWordLetters + hiddenLength)));
-    let cols=Math.max(minCols,Math.ceil(Math.sqrt(totalWordLetters + hiddenLength)));
+    // Bepaal rastergrootte zodat max lege vakjes <= hiddenLength
+    let rows=Math.max(minRows, Math.ceil(Math.sqrt(totalWordLetters + hiddenLength)));
+    let cols=Math.max(minCols, Math.ceil(Math.sqrt(totalWordLetters + hiddenLength)));
+
     while((rows*cols - totalWordLetters) > hiddenLength){
         if(rows>=cols) rows--;
         else cols--;
@@ -125,8 +126,8 @@ function generate(){
     for(let i=0;i<diagWords.length;i++){
         let word=diagWords[i];
         let placed=false;
-        for(let r=[0, rows-word.length][i%2]; !placed && r>=0 && r<rows; r+=1){
-            for(let c=[0, cols-word.length][(i%2)]; !placed && c>=0 && c<cols; c+=1){
+        for(let r=0;r<=rows-word.length && !placed;r++){
+            for(let c=0;c<=cols-word.length && !placed;c++){
                 let rInc=1;
                 let cInc=(i%2===0)?1:-1;
                 if(canPlace(grid,word,r,c,rInc,cInc)){
@@ -137,13 +138,13 @@ function generate(){
         }
     }
 
-    // 2. Overige woorden horizontaal/verticaal plaatsen met maximale kruising
+    // 2. Overige woorden horizontaal/verticaal met maximale kruising
     let remainingWords=words.filter(w=>!diagWords.includes(w));
     for(let word of remainingWords){
         let bestScore=-1, bestPos=null;
         for(let r=0;r<rows;r++){
             for(let c=0;c<cols;c++){
-                for(let [rInc,cInc] of [[0,1],[1,0]]){
+                for(let [rInc,cInc] of [[0,1],[1,0]]){ 
                     if(canPlace(grid,word,r,c,rInc,cInc)){
                         let score=0;
                         for(let i=0;i<word.length;i++){
@@ -161,14 +162,22 @@ function generate(){
         if(bestPos) placeWord(grid,word,bestPos.r,bestPos.c,bestPos.rInc,bestPos.cInc);
     }
 
-    // 3. Controle max lege vakjes
-    let emptyCount=grid.flat().filter(v=>v==="").length;
-    if(emptyCount>hiddenLength){
-        // Herstart of trimming lege vakjes niet nodig, want max. letters van verborgen boodschap
-        emptyCount=hiddenLength;
+    // 3. Werkelijk aantal lege vakjes tellen
+    let actualEmptyCount=grid.flat().filter(v=>v==="").length;
+
+    // 4. Beperk lege vakjes tot hiddenLength door extra letters te vullen
+    if(actualEmptyCount>hiddenLength){
+        for(let r=0;r<rows;r++){
+            for(let c=0;c<cols;c++){
+                if(grid[r][c]==="" && actualEmptyCount>hiddenLength){
+                    grid[r][c]="X"; // vul met tijdelijke letter, bijv. X
+                    actualEmptyCount--;
+                }
+            }
+        }
     }
 
-    // 4. Toon raster
+    // 5. Toon raster
     let htmlOutput="",excelOutput="";
     for(let r=0;r<rows;r++){
         for(let c=0;c<cols;c++){
@@ -182,9 +191,9 @@ function generate(){
     document.getElementById("grid").innerHTML=htmlOutput;
     document.getElementById("excel").value=excelOutput;
     document.getElementById("emptyCount").innerText=
-        "Aantal lege vakjes: "+emptyCount+
+        "Aantal lege vakjes: "+actualEmptyCount+
         " | Letters verborgen boodschap: "+hiddenLength+
-        " | Letters handmatig toevoegen: "+Math.max(0,hiddenLength-emptyCount);
+        " | Letters handmatig toevoegen: "+Math.max(0,hiddenLength-actualEmptyCount);
 }
 </script>
 
