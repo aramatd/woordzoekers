@@ -115,7 +115,6 @@ function generate(){
     let rows = Math.max(minRows, estSide);
     let cols = Math.max(minCols, estSide);
 
-    // Controle: (rows*cols - totaal letters) <= hiddenLength
     while((rows*cols - totalLetters) > hiddenLength){
         if(rows >= cols) rows--;
         else cols--;
@@ -132,44 +131,52 @@ function generate(){
     for(let i=0;i<diagWords.length;i++){
         let word = diagWords[i];
         let placed=false;
-        let attempts=0;
-        while(!placed && attempts<200){
-            attempts++;
-            let rInc = 1;
-            let cInc = (i%2===0)?1:-1; // D1 of D2
-            let r = (i<Math.ceil(diagWords.length/2))? 0 : rows-word.length; // boven of onder rand
-            let c = (cInc===1)? 0 : cols-word.length; // links of rechts
-            if(canPlace(grid,word,r,c,rInc,cInc)){
-                placeWord(grid,word,r,c,rInc,cInc);
-                placed=true;
+        for(let rStart=0; rStart<=rows-word.length; rStart++){
+            if(placed) break;
+            for(let cStart=0; cStart<=cols-word.length; cStart++){
+                let rInc=1;
+                let cInc=(i%2===0)?1:-1;
+                if(canPlace(grid,word,rStart,cStart,rInc,cInc)){
+                    placeWord(grid,word,rStart,cStart,rInc,cInc);
+                    placed=true;
+                    break;
+                }
             }
         }
     }
 
-    // Plaats overige woorden horizontaal/verticaal
+    // Plaats overige woorden horizontaal/verticaal met maximale kruising
     let remainingWords = words.filter(w=>!diagWords.includes(w));
-    for(let i=0;i<remainingWords.length;i++){
-        let word=remainingWords[i];
+    for(let word of remainingWords){
         let placed=false;
-        let attempts=0;
-        while(!placed && attempts<500){
-            attempts++;
-            let rInc=(i%2===0)?0:1;
-            let cInc=(i%2===0)?1:0;
-            let r=Math.floor(Math.random()*(rows-(rInc?word.length:0)));
-            let c=Math.floor(Math.random()*(cols-(cInc?word.length:0)));
-            if(canPlace(grid,word,r,c,rInc,cInc)){
-                placeWord(grid,word,r,c,rInc,cInc);
-                placed=true;
+        let bestScore=-1;
+        let bestPos=null;
+        for(let r=0;r<rows;r++){
+            for(let c=0;c<cols;c++){
+                for(let [rInc,cInc] of [[0,1],[1,0]]){
+                    if(canPlace(grid,word,r,c,rInc,cInc)){
+                        // Score = aantal letters dat kruist
+                        let score=0;
+                        for(let i=0;i<word.length;i++){
+                            let rr=r+i*rInc, cc=c+i*cInc;
+                            if(grid[rr][cc]===word[i]) score++;
+                        }
+                        if(score>bestScore){
+                            bestScore=score;
+                            bestPos={r,c,rInc,cInc};
+                        }
+                    }
+                }
             }
+        }
+        if(bestPos){
+            placeWord(grid,word,bestPos.r,bestPos.c,bestPos.rInc,bestPos.cInc);
         }
     }
 
     // Tellen lege vakjes
     let emptyCount=grid.flat().filter(v=>v==="").length;
-    if(emptyCount>hiddenLength){
-        emptyCount=hiddenLength; // nooit meer dan letters verborgen boodschap
-    }
+    if(emptyCount>hiddenLength) emptyCount=hiddenLength;
 
     document.getElementById("emptyCount").innerText=
         "Aantal lege vakjes: "+emptyCount+
