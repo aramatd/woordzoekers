@@ -12,7 +12,7 @@ button { padding:10px; }
 </head>
 <body>
 
-<h2>Woordzoeker Generator -</h2>
+<h2>Woordzoeker Generator</h2>
 
 <label>Woorden (1 per regel)</label>
 <textarea id="words"></textarea>
@@ -26,8 +26,6 @@ button { padding:10px; }
 <pre id="grid"></pre>
 
 <script>
-
-// ======================= MAIN =======================
 
 function generate() {
     let words = document.getElementById("words").value
@@ -57,32 +55,24 @@ function generatePuzzle(words, message) {
     let totalLetters = words.reduce((a,w)=>a+w.length,0);
     let baseSize = Math.ceil(Math.sqrt(totalLetters + message.length));
 
-    let maxAttempts = 5000;
+    for (let size = Math.max(5, baseSize - 2); size <= baseSize + 2; size++) {
 
-    // 🔥 BELANGRIJK: ook kleinere rasters proberen
-    for (let size = Math.max(5, baseSize - 3); size <= baseSize + 3; size++) {
+        let grid = createGrid(size);
 
-        for (let attempt=0; attempt<maxAttempts; attempt++) {
+        let messageCells = getRandomCells(grid, message.length);
+        let messageMap = buildMessageMap(messageCells, message);
 
-            let grid = createGrid(size);
+        let dirs = createDirectionList(words.length);
 
-            let messageCells = getRandomCells(grid, message.length);
-            let messageMap = buildMessageMap(messageCells, message);
+        let success = solve(grid, words, dirs, messageMap);
 
-            let dirs = createDirectionList(words.length);
+        if (success) {
+            let empty = countEmpty(grid);
+            let verschil = empty - message.length;
 
-            let success = solve(grid, words, dirs, messageMap);
-
-            if (success) {
-
-                let empty = countEmpty(grid);
-                let verschil = empty - message.length;
-
-                // ✅ accepteer kleine afwijking
-                if (Math.abs(verschil) <= 10) {
-                    placeMessage(grid, message, messageCells);
-                    return {success:true, grid};
-                }
+            if (Math.abs(verschil) <= 10) {
+                placeMessage(grid, message, messageCells);
+                return {success:true, grid};
             }
         }
     }
@@ -93,34 +83,42 @@ function generatePuzzle(words, message) {
     };
 }
 
-// ======================= SOLVER =======================
+// ======================= SLIMME SOLVER =======================
 
 function solve(grid, words, directions, messageMap) {
 
     if (words.length === 0) return true;
 
-    let options = words.map((word, i)=>({
-        word,
-        dirType: directions[i],
-        positions: getPositionsByType(grid, word, directions[i], messageMap)
-    }));
+    let bestIndex = -1;
+    let bestOptions = null;
 
-    options.sort((a,b)=>a.positions.length - b.positions.length);
+    for (let i=0;i<words.length;i++) {
 
-    let current = options[0];
+        let options = getPositionsByType(grid, words[i], directions[i], messageMap);
 
-    if (current.positions.length === 0) return false;
+        if (options.length === 0) return false;
 
-    for (let pos of current.positions) {
+        if (!bestOptions || options.length < bestOptions.length) {
+            bestOptions = options;
+            bestIndex = i;
+        }
+    }
+
+    let word = words[bestIndex];
+
+    for (let pos of bestOptions) {
 
         let snapshot = copyGrid(grid);
 
-        placeAt(grid, current.word, pos);
+        placeAt(grid, word, pos);
 
-        let remainingWords = words.filter(w=>w!==current.word);
-        let remainingDirs = directions.slice(1);
+        let newWords = words.slice();
+        let newDirs = directions.slice();
 
-        if (solve(grid, remainingWords, remainingDirs, messageMap)) return true;
+        newWords.splice(bestIndex,1);
+        newDirs.splice(bestIndex,1);
+
+        if (solve(grid, newWords, newDirs, messageMap)) return true;
 
         copyInto(grid, snapshot);
     }
@@ -128,7 +126,7 @@ function solve(grid, words, directions, messageMap) {
     return false;
 }
 
-// ======================= POSITIES =======================
+// ======================= REST (ongewijzigd) =======================
 
 function getPositionsByType(grid, word, type, messageMap) {
     let results = [];
@@ -146,13 +144,9 @@ function getPositionsByType(grid, word, type, messageMap) {
     return results;
 }
 
-// ======================= GRID =======================
-
 function createGrid(size) {
     return Array.from({length:size}, ()=>Array(size).fill(null));
 }
-
-// ======================= MESSAGE =======================
 
 function getRandomCells(grid, count) {
     let cells = [];
@@ -169,13 +163,11 @@ function getRandomCells(grid, count) {
 
 function buildMessageMap(cells, message) {
     let map = {};
-
     for (let i=0;i<cells.length;i++) {
         let {x,y} = cells[i];
         if (!map[y]) map[y] = {};
         map[y][x] = message[i];
     }
-
     return map;
 }
 
@@ -185,8 +177,6 @@ function placeMessage(grid, message, cells) {
         grid[y][x] = message[i];
     }
 }
-
-// ======================= PLAATSEN =======================
 
 function canPlace(grid, word, x, y, dir, messageMap) {
     let dx = dir[0], dy = dir[1];
@@ -222,8 +212,6 @@ function placeAt(grid, word, pos) {
     }
 }
 
-// ======================= HULP =======================
-
 function countEmpty(grid) {
     let count = 0;
     for (let row of grid) {
@@ -254,7 +242,7 @@ function createDirectionList(n) {
         list.push(["H","V","D"][i]);
     }
 
-    return shuffle(list);
+    return list;
 }
 
 function copyGrid(grid) {
@@ -281,8 +269,6 @@ function drawGrid(grid) {
     return grid.map(r=>r.join(" ")).join("\n");
 }
 
-// ======================= ANALYSE =======================
-
 function analyzeFailure(words, message, size) {
 
     let tips = [];
@@ -294,21 +280,20 @@ function analyzeFailure(words, message, size) {
 
     if (verschil > 0) {
         tips.push("Je komt " + verschil + " vakjes tekort");
-        tips.push("Verkort totaal met " + verschil + " letters");
     } else {
-        tips.push("Raster is waarschijnlijk te groot → probeer kortere boodschap");
+        tips.push("Raster is waarschijnlijk te groot");
+        tips.push("Maak je boodschap langer");
     }
 
-    let longest = Math.max(...words.map(w=>w.length));
-    if (longest > size) {
-        tips.push("Langste woord ("+longest+") past niet in raster ("+size+")");
-    }
+    let lengths = words.map(w=>w.length);
+    let counts = {};
 
-    let joined = words.join("");
-    let unique = new Set(joined).size;
+    lengths.forEach(l=>counts[l]=(counts[l]||0)+1);
 
-    if (unique / joined.length > 0.8) {
-        tips.push("Woorden delen weinig letters → weinig overlap mogelijk");
+    for (let l in counts) {
+        if (counts[l] > 4) {
+            tips.push("Te veel woorden van lengte " + l + " → vervang er 1 door andere lengte");
+        }
     }
 
     return "Geen oplossing gevonden:\n- " + tips.join("\n- ");
