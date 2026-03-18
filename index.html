@@ -12,7 +12,7 @@ button { padding:10px; }
 </head>
 <body>
 
-<h2>Woordzoeker Generator (zonder boodschap)</h2>
+<h2>Woordzoeker Generatorm</h2>
 
 <label>Woorden (1 per regel)</label>
 <textarea id="words"></textarea>
@@ -24,7 +24,14 @@ button { padding:10px; }
 
 <script>
 
+// ======= VEILIGHEID =======
+let steps = 0;
+let MAX_STEPS = 20000;
+
+// ======= MAIN =======
+
 function generate() {
+
     let words = document.getElementById("words").value
         .toUpperCase().split("\n")
         .map(w=>w.trim()).filter(w=>w);
@@ -41,7 +48,7 @@ function generate() {
     }
 }
 
-// ======================= GENERATOR =======================
+// ======= GENERATOR =======
 
 function generatePuzzle(words) {
 
@@ -55,6 +62,8 @@ function generatePuzzle(words) {
         let grid = createGrid(size);
 
         let dirs = createDirectionList(words.length);
+
+        steps = 0; // reset!
 
         let success = solve(grid, words, dirs);
 
@@ -70,13 +79,16 @@ function generatePuzzle(words) {
 
     return {
         success:false,
-        reason: analyzeFailure(words)
+        reason: "Geen goede puzzel mogelijk. Probeer andere woorden."
     };
 }
 
-// ======================= SOLVER =======================
+// ======= SOLVER =======
 
 function solve(grid, words, directions) {
+
+    steps++;
+    if (steps > MAX_STEPS) return false;
 
     if (words.length === 0) return true;
 
@@ -117,7 +129,7 @@ function solve(grid, words, directions) {
     return false;
 }
 
-// ======================= POSITIES =======================
+// ======= POSITIES =======
 
 function getPositions(grid, word, type) {
     let results = [];
@@ -135,15 +147,37 @@ function getPositions(grid, word, type) {
     return results;
 }
 
-// ======================= GRID =======================
+// ======= RICHTINGEN =======
+
+function getDirs(type) {
+    if (type==="H") return [[1,0],[-1,0]];
+    if (type==="V") return [[0,1],[0,-1]];
+    return [[1,1],[-1,-1],[1,-1],[-1,1]];
+}
+
+function createDirectionList(n) {
+
+    let list = [];
+
+    for (let i = 0; i < n; i++) {
+        if (i % 3 === 0) list.push("H");
+        else if (i % 3 === 1) list.push("V");
+        else list.push("D");
+    }
+
+    return shuffle(list);
+}
+
+// ======= GRID =======
 
 function createGrid(size) {
     return Array.from({length:size}, ()=>Array(size).fill(null));
 }
 
-// ======================= PLAATSEN =======================
+// ======= PLAATSEN =======
 
 function canPlace(grid, word, x, y, dir) {
+
     let dx = dir[0], dy = dir[1];
     let size = grid.length;
 
@@ -153,6 +187,7 @@ function canPlace(grid, word, x, y, dir) {
     if (endX<0||endY<0||endX>=size||endY>=size) return false;
 
     for (let i=0;i<word.length;i++) {
+
         let cx = x + dx*i;
         let cy = y + dy*i;
 
@@ -173,7 +208,7 @@ function placeAt(grid, word, pos) {
     }
 }
 
-// ======================= HULP =======================
+// ======= HULP =======
 
 function countEmpty(grid) {
     let count = 0;
@@ -183,29 +218,6 @@ function countEmpty(grid) {
         }
     }
     return count;
-}
-
-function getDirs(type) {
-    if (type==="H") return [[1,0],[-1,0]];
-    if (type==="V") return [[0,1],[0,-1]];
-    return [[1,1],[-1,-1],[1,-1],[-1,1]];
-}
-
-function createDirectionList(n) {
-    let base = Math.floor(n/3);
-    let rest = n % 3;
-
-    let list = [
-        ...Array(base).fill("H"),
-        ...Array(base).fill("V"),
-        ...Array(base).fill("D")
-    ];
-
-    for (let i=0;i<rest;i++) {
-        list.push(["H","V","D"][i]);
-    }
-
-    return list;
 }
 
 function copyGrid(grid) {
@@ -220,31 +232,16 @@ function copyInto(target, source) {
     }
 }
 
-function drawGrid(grid) {
-    return grid.map(r=>r.map(c=>c||".").join(" ")).join("\n");
+function shuffle(arr) {
+    for (let i=arr.length-1;i>0;i--) {
+        let j=Math.floor(Math.random()*(i+1));
+        [arr[i],arr[j]]=[arr[j],arr[i]];
+    }
+    return arr;
 }
 
-// ======================= ANALYSE =======================
-
-function analyzeFailure(words) {
-
-    let tips = [];
-
-    let lengths = words.map(w=>w.length);
-    let counts = {};
-
-    lengths.forEach(l=>counts[l]=(counts[l]||0)+1);
-
-    for (let l in counts) {
-        if (counts[l] > 4) {
-            tips.push("Te veel woorden van lengte " + l);
-        }
-    }
-
-    tips.push("Probeer meer variatie in woordlengtes");
-    tips.push("Of gebruik langere woorden");
-
-    return "Geen goede puzzel mogelijk:\n- " + tips.join("\n- ");
+function drawGrid(grid) {
+    return grid.map(r=>r.map(c=>c||".").join(" ")).join("\n");
 }
 
 </script>
