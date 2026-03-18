@@ -12,7 +12,7 @@ button { padding:10px; }
 </head>
 <body>
 
-<h2>Woordzoeker Generatorm</h2>
+<h2>Woordzoeker Generator</h2>
 
 <label>Woorden (1 per regel)</label>
 <textarea id="words"></textarea>
@@ -63,7 +63,7 @@ function generatePuzzle(words) {
 
         let dirs = createDirectionList(words.length);
 
-        steps = 0; // reset!
+        steps = 0;
 
         let success = solve(grid, words, dirs);
 
@@ -71,7 +71,7 @@ function generatePuzzle(words) {
 
             let empty = countEmpty(grid);
 
-            if (empty <= 20) {
+            if (empty <= 20 && !hasAdjacentEmpty(grid)) {
                 return {success:true, grid, empty};
             }
         }
@@ -206,6 +206,26 @@ function placeAt(grid, word, pos) {
     for (let i=0;i<word.length;i++) {
         grid[y+dy*i][x+dx*i] = word[i];
     }
+}
+
+// ======= CHECK LEGE VAKJES =======
+
+function hasAdjacentEmpty(grid) {
+    let size = grid.length;
+
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+
+            if (grid[y][x] === null) {
+
+                // alleen horizontaal checken
+                if (x < size - 1 && grid[y][x+1] === null) return true;
+                if (x > 0 && grid[y][x-1] === null) return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 // ======= HULP =======
