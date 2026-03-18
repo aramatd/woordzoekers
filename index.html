@@ -5,20 +5,17 @@
 <title>Woordzoeker Generator</title>
 <style>
 body { font-family: Arial; padding:20px; }
-textarea, input { width:100%; margin-bottom:10px; }
+textarea { width:100%; margin-bottom:10px; }
 button { padding:10px; }
 #grid { white-space:pre; font-family:monospace; margin-top:20px; }
 </style>
 </head>
 <body>
 
-<h2>Woordzoeker Generator</h2>
+<h2>Woordzoeker Generator (zonder boodschap)</h2>
 
 <label>Woorden (1 per regel)</label>
 <textarea id="words"></textarea>
-
-<label>Verborgen boodschap</label>
-<input id="message">
 
 <button onclick="generate()">Genereer</button>
 
@@ -32,14 +29,12 @@ function generate() {
         .toUpperCase().split("\n")
         .map(w=>w.trim()).filter(w=>w);
 
-    let message = document.getElementById("message").value
-        .toUpperCase().replace(/[^A-Z]/g,"");
-
-    let result = generatePuzzle(words, message);
+    let result = generatePuzzle(words);
 
     if (result.success) {
         document.getElementById("grid").textContent = drawGrid(result.grid);
-        document.getElementById("output").textContent = "Gelukt!";
+        document.getElementById("output").textContent =
+            "Gelukt! Lege vakjes: " + result.empty;
     } else {
         document.getElementById("grid").textContent = "";
         document.getElementById("output").textContent = result.reason;
@@ -48,44 +43,40 @@ function generate() {
 
 // ======================= GENERATOR =======================
 
-function generatePuzzle(words, message) {
+function generatePuzzle(words) {
 
     words.sort((a,b)=>b.length-a.length);
 
     let totalLetters = words.reduce((a,w)=>a+w.length,0);
-    let baseSize = Math.ceil(Math.sqrt(totalLetters + message.length));
+    let baseSize = Math.ceil(Math.sqrt(totalLetters));
 
     for (let size = Math.max(5, baseSize - 2); size <= baseSize + 2; size++) {
 
         let grid = createGrid(size);
 
-        let messageCells = getRandomCells(grid, message.length);
-        let messageMap = buildMessageMap(messageCells, message);
-
         let dirs = createDirectionList(words.length);
 
-        let success = solve(grid, words, dirs, messageMap);
+        let success = solve(grid, words, dirs);
 
         if (success) {
-            let empty = countEmpty(grid);
-            let verschil = empty - message.length;
 
-            if (Math.abs(verschil) <= 10) {
-                placeMessage(grid, message, messageCells);
-                return {success:true, grid};
+            let empty = countEmpty(grid);
+
+            if (empty <= 20) {
+                return {success:true, grid, empty};
             }
         }
     }
 
     return {
         success:false,
-        reason: analyzeFailure(words, message, baseSize)
+        reason: analyzeFailure(words)
     };
 }
 
-// ======================= SLIMME SOLVER =======================
+// ======================= SOLVER =======================
 
-function solve(grid, words, directions, messageMap) {
+function solve(grid, words, directions) {
 
     if (words.length === 0) return true;
 
@@ -94,7 +85,7 @@ function solve(grid, words, directions, messageMap) {
 
     for (let i=0;i<words.length;i++) {
 
-        let options = getPositionsByType(grid, words[i], directions[i], messageMap);
+        let options = getPositions(grid, words[i], directions[i]);
 
         if (options.length === 0) return false;
 
@@ -118,7 +109,7 @@ function solve(grid, words, directions, messageMap) {
         newWords.splice(bestIndex,1);
         newDirs.splice(bestIndex,1);
 
-        if (solve(grid, newWords, newDirs, messageMap)) return true;
+        if (solve(grid, newWords, newDirs)) return true;
 
         copyInto(grid, snapshot);
     }
@@ -126,16 +117,16 @@ function solve(grid, words, directions, messageMap) {
     return false;
 }
 
-// ======================= REST (ongewijzigd) =======================
+// ======================= POSITIES =======================
 
-function getPositionsByType(grid, word, type, messageMap) {
+function getPositions(grid, word, type) {
     let results = [];
     let dirs = getDirs(type);
 
     for (let dir of dirs) {
         for (let y=0;y<grid.length;y++) {
             for (let x=0;x<grid.length;x++) {
-                if (canPlace(grid, word, x, y, dir, messageMap)) {
+                if (canPlace(grid, word, x, y, dir)) {
                     results.push({x,y,dir});
                 }
             }
@@ -144,41 +135,15 @@ function getPositionsByType(grid, word, type, messageMap) {
     return results;
 }
 
+// ======================= GRID =======================
+
 function createGrid(size) {
     return Array.from({length:size}, ()=>Array(size).fill(null));
 }
 
-function getRandomCells(grid, count) {
-    let cells = [];
+// ======================= PLAATSEN =======================
 
-    for (let y=0;y<grid.length;y++) {
-        for (let x=0;x<grid.length;x++) {
-            cells.push({x,y});
-        }
-    }
-
-    shuffle(cells);
-    return cells.slice(0, count);
-}
-
-function buildMessageMap(cells, message) {
-    let map = {};
-    for (let i=0;i<cells.length;i++) {
-        let {x,y} = cells[i];
-        if (!map[y]) map[y] = {};
-        map[y][x] = message[i];
-    }
-    return map;
-}
-
-function placeMessage(grid, message, cells) {
-    for (let i=0;i<message.length;i++) {
-        let {x,y} = cells[i];
-        grid[y][x] = message[i];
-    }
-}
-
-function canPlace(grid, word, x, y, dir, messageMap) {
+function canPlace(grid, word, x, y, dir) {
     let dx = dir[0], dy = dir[1];
     let size = grid.length;
 
@@ -192,10 +157,6 @@ function canPlace(grid, word, x, y, dir, messageMap) {
         let cy = y + dy*i;
 
         let cell = grid[cy][cx];
-
-        if (messageMap[cy] && messageMap[cy][cx] && messageMap[cy][cx] !== word[i]) {
-            return false;
-        }
 
         if (cell!==null && cell!==word[i]) return false;
     }
@@ -211,6 +172,8 @@ function placeAt(grid, word, pos) {
         grid[y+dy*i][x+dx*i] = word[i];
     }
 }
+
+// ======================= HULP =======================
 
 function countEmpty(grid) {
     let count = 0;
@@ -257,33 +220,15 @@ function copyInto(target, source) {
     }
 }
 
-function shuffle(arr) {
-    for (let i=arr.length-1;i>0;i--) {
-        let j=Math.floor(Math.random()*(i+1));
-        [arr[i],arr[j]]=[arr[j],arr[i]];
-    }
-    return arr;
-}
-
 function drawGrid(grid) {
-    return grid.map(r=>r.join(" ")).join("\n");
+    return grid.map(r=>r.map(c=>c||".").join(" ")).join("\n");
 }
 
-function analyzeFailure(words, message, size) {
+// ======================= ANALYSE =======================
+
+function analyzeFailure(words) {
 
     let tips = [];
-
-    let totalLetters = words.reduce((a,w)=>a+w.length,0);
-    let cells = size*size;
-
-    let verschil = (totalLetters + message.length) - cells;
-
-    if (verschil > 0) {
-        tips.push("Je komt " + verschil + " vakjes tekort");
-    } else {
-        tips.push("Raster is waarschijnlijk te groot");
-        tips.push("Maak je boodschap langer");
-    }
 
     let lengths = words.map(w=>w.length);
     let counts = {};
@@ -292,11 +237,14 @@ function analyzeFailure(words, message, size) {
 
     for (let l in counts) {
         if (counts[l] > 4) {
-            tips.push("Te veel woorden van lengte " + l + " → vervang er 1 door andere lengte");
+            tips.push("Te veel woorden van lengte " + l);
         }
     }
 
-    return "Geen oplossing gevonden:\n- " + tips.join("\n- ");
+    tips.push("Probeer meer variatie in woordlengtes");
+    tips.push("Of gebruik langere woorden");
+
+    return "Geen goede puzzel mogelijk:\n- " + tips.join("\n- ");
 }
 
 </script>
