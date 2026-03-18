@@ -12,7 +12,7 @@ button { padding:10px; }
 </head>
 <body>
 
-<h2>Woordzoeker Generator</h2>
+<h2>Woordzoeker Generator -</h2>
 
 <label>Woorden (1 per regel)</label>
 <textarea id="words"></textarea>
@@ -59,7 +59,8 @@ function generatePuzzle(words, message) {
 
     let maxAttempts = 5000;
 
-    for (let size = baseSize; size <= baseSize+3; size++) {
+    // 🔥 BELANGRIJK: ook kleinere rasters proberen
+    for (let size = Math.max(5, baseSize - 3); size <= baseSize + 3; size++) {
 
         for (let attempt=0; attempt<maxAttempts; attempt++) {
 
@@ -75,34 +76,21 @@ function generatePuzzle(words, message) {
             if (success) {
 
                 let empty = countEmpty(grid);
+                let verschil = empty - message.length;
 
-                if (empty > message.length) {
-                    let verschil = empty - message.length;
-
-                    if (verschil <= 10) {
-                        return {
-                            success:false,
-                            reason: "Oplossing moet " + verschil + " letters langer zijn"
-                        };
-                    } else {
-                        return {
-                            success:false,
-                            reason: "Te veel lege vakjes (" + verschil + "). Voeg langere woorden toe."
-                        };
-                    }
+                // ✅ accepteer kleine afwijking
+                if (Math.abs(verschil) <= 10) {
+                    placeMessage(grid, message, messageCells);
+                    return {success:true, grid};
                 }
-
-                placeMessage(grid, message, messageCells);
-
-                return {success:true, grid};
             }
         }
-
-        return {
-            success:false,
-            reason: analyzeFailure(words, message, size)
-        };
     }
+
+    return {
+        success:false,
+        reason: analyzeFailure(words, message, baseSize)
+    };
 }
 
 // ======================= SOLVER =======================
@@ -176,7 +164,6 @@ function getRandomCells(grid, count) {
     }
 
     shuffle(cells);
-
     return cells.slice(0, count);
 }
 
@@ -308,6 +295,8 @@ function analyzeFailure(words, message, size) {
     if (verschil > 0) {
         tips.push("Je komt " + verschil + " vakjes tekort");
         tips.push("Verkort totaal met " + verschil + " letters");
+    } else {
+        tips.push("Raster is waarschijnlijk te groot → probeer kortere boodschap");
     }
 
     let longest = Math.max(...words.map(w=>w.length));
@@ -321,8 +310,6 @@ function analyzeFailure(words, message, size) {
     if (unique / joined.length > 0.8) {
         tips.push("Woorden delen weinig letters → weinig overlap mogelijk");
     }
-
-    tips.push("Probeer een groter raster of kortere woorden");
 
     return "Geen oplossing gevonden:\n- " + tips.join("\n- ");
 }
