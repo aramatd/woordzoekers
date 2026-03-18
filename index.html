@@ -4,266 +4,176 @@
 <meta charset="UTF-8">
 <title>Woordzoeker Generator</title>
 <style>
-body { font-family: Arial; padding:20px; }
-textarea { width:100%; margin-bottom:10px; }
-button { padding:10px; }
-#grid { white-space:pre; font-family:monospace; margin-top:20px; }
+body { font-family: Arial; text-align: center; }
+#grid { display: grid; gap: 2px; justify-content: center; margin-top: 20px; }
+.cell { width: 30px; height: 30px; border: 1px solid #ccc; display:flex; align-items:center; justify-content:center; font-weight:bold; }
 </style>
 </head>
 <body>
 
 <h2>Woordzoeker Generator</h2>
-
-<label>Woorden (1 per regel)</label>
-<textarea id="words"></textarea>
-
-<button onclick="generate()">Genereer</button>
-
-<div id="output"></div>
-<pre id="grid"></pre>
+<textarea id="words" rows="5" cols="40" placeholder="Voer woorden in, gescheiden door komma's"></textarea><br><br>
+<button onclick="start()">Genereer</button>
+<p id="timer"></p>
+<p id="status"></p>
+<div id="grid"></div>
 
 <script>
+const directions = [
+  {dx:1,dy:0,type:'h'}, {dx:-1,dy:0,type:'h'},
+  {dx:0,dy:1,type:'v'}, {dx:0,dy:-1,type:'v'},
+  {dx:1,dy:1,type:'d'}, {dx:-1,dy:-1,type:'d'},
+  {dx:-1,dy:1,type:'d'}, {dx:1,dy:-1,type:'d'}
+];
 
-// ======= VEILIGHEID =======
-let steps = 0;
-let MAX_STEPS = 20000;
+function start(){
+  let words = document.getElementById('words').value
+    .toUpperCase()
+    .replace(/[^A-Z,]/g,'')
+    .split(',')
+    .filter(w=>w.length>0);
 
-// ======= MAIN =======
+  words = [...new Set(words)];
 
-function generate() {
+  let startTime = Date.now();
+  let best = null;
 
-    let words = document.getElementById("words").value
-        .toUpperCase().split("\n")
-        .map(w=>w.trim()).filter(w=>w);
+  function loop(){
+    let elapsed = (Date.now()-startTime)/1000;
+    document.getElementById('timer').innerText = "Tijd: " + (10 - elapsed).toFixed(1);
 
-    let result = generatePuzzle(words);
-
-    if (result.success) {
-        document.getElementById("grid").textContent = drawGrid(result.grid);
-        document.getElementById("output").textContent =
-            "Gelukt! Lege vakjes: " + result.empty;
-    } else {
-        document.getElementById("grid").textContent = "";
-        document.getElementById("output").textContent = result.reason;
+    if(elapsed > 10){
+      finish(best);
+      return;
     }
+
+    let attempt = generate(words);
+
+    if(attempt){
+      let score = scoreGrid(attempt);
+      if(!best || score > best.score){
+        best = {grid:attempt, score};
+      }
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  loop();
 }
 
-// ======= GENERATOR =======
+function generate(words){
+  let maxLen = Math.max(...words.map(w=>w.length));
+  let size = maxLen + Math.floor(Math.random()*8);
 
-function generatePuzzle(words) {
+  let grid = Array.from({length:size},()=>Array(size).fill(''));
 
-    words.sort((a,b)=>b.length-a.length);
+  words = [...words].sort((a,b)=>b.length-a.length);
 
-    let totalLetters = words.reduce((a,w)=>a+w.length,0);
-    let baseSize = Math.ceil(Math.sqrt(totalLetters));
+  for(let word of words){
+    let placed = placeWord(grid, word);
+    if(!placed) return null;
+  }
 
-    for (let size = Math.max(5, baseSize - 2); size <= baseSize + 2; size++) {
+  if(!checkEmpty(grid)) return null;
 
-        let grid = createGrid(size);
+  return grid;
+}
 
-        let dirs = createDirectionList(words.length);
+function placeWord(grid, word){
+  let size = grid.length;
+  let options = [];
 
-        steps = 0;
+  for(let dir of directions){
+    for(let x=0;x<size;x++){
+      for(let y=0;y<size;y++){
+        let overlap = 0;
+        let ok = true;
 
-        let success = solve(grid, words, dirs);
+        for(let i=0;i<word.length;i++){
+          let nx = x + dir.dx*i;
+          let ny = y + dir.dy*i;
 
-        if (success) {
+          if(nx<0||ny<0||nx>=size||ny>=size){ ok=false; break; }
 
-            let empty = countEmpty(grid);
-
-            if (empty <= 20 && !hasAdjacentEmpty(grid)) {
-                return {success:true, grid, empty};
-            }
+          let c = grid[ny][nx];
+          if(c && c!==word[i]){ ok=false; break; }
+          if(c===word[i]) overlap++;
         }
+
+        if(ok) options.push({x,y,dir,overlap});
+      }
     }
+  }
 
-    return {
-        success:false,
-        reason: "Geen goede puzzel mogelijk. Probeer andere woorden."
-    };
+  options.sort((a,b)=>b.overlap-a.overlap);
+
+  if(options.length===0) return false;
+
+  let pick = options[Math.floor(Math.random()*Math.min(5,options.length))];
+
+  for(let i=0;i<word.length;i++){
+    let nx = pick.x + pick.dir.dx*i;
+    let ny = pick.y + pick.dir.dy*i;
+    grid[ny][nx] = word[i];
+  }
+
+  return true;
 }
 
-// ======= SOLVER =======
+function checkEmpty(grid){
+  let empty = 0;
 
-function solve(grid, words, directions) {
-
-    steps++;
-    if (steps > MAX_STEPS) return false;
-
-    if (words.length === 0) return true;
-
-    let bestIndex = -1;
-    let bestOptions = null;
-
-    for (let i=0;i<words.length;i++) {
-
-        let options = getPositions(grid, words[i], directions[i]);
-
-        if (options.length === 0) return false;
-
-        if (!bestOptions || options.length < bestOptions.length) {
-            bestOptions = options;
-            bestIndex = i;
-        }
+  for(let y=0;y<grid.length;y++){
+    let streak = 0;
+    for(let x=0;x<grid.length;x++){
+      if(!grid[y][x]){
+        empty++;
+        streak++;
+        if(streak>1) return false;
+      } else {
+        streak=0;
+      }
     }
+  }
 
-    let word = words[bestIndex];
+  return empty<=20;
+}
 
-    for (let pos of bestOptions) {
-
-        let snapshot = copyGrid(grid);
-
-        placeAt(grid, word, pos);
-
-        let newWords = words.slice();
-        let newDirs = directions.slice();
-
-        newWords.splice(bestIndex,1);
-        newDirs.splice(bestIndex,1);
-
-        if (solve(grid, newWords, newDirs)) return true;
-
-        copyInto(grid, snapshot);
+function scoreGrid(grid){
+  let empty = 0;
+  for(let row of grid){
+    for(let c of row){
+      if(!c) empty++;
     }
-
-    return false;
+  }
+  return 100 - empty - grid.length;
 }
 
-// ======= POSITIES =======
+function finish(best){
+  if(!best){
+    document.getElementById('status').innerText = "Geen goede puzzel gevonden";
+    return;
+  }
 
-function getPositions(grid, word, type) {
-    let results = [];
-    let dirs = getDirs(type);
+  render(best.grid);
+  document.getElementById('status').innerText = "Beste poging weergegeven";
+}
 
-    for (let dir of dirs) {
-        for (let y=0;y<grid.length;y++) {
-            for (let x=0;x<grid.length;x++) {
-                if (canPlace(grid, word, x, y, dir)) {
-                    results.push({x,y,dir});
-                }
-            }
-        }
+function render(grid){
+  let div = document.getElementById('grid');
+  div.innerHTML='';
+  div.style.gridTemplateColumns = `repeat(${grid.length}, 30px)`;
+
+  for(let y=0;y<grid.length;y++){
+    for(let x=0;x<grid.length;x++){
+      let cell = document.createElement('div');
+      cell.className='cell';
+      cell.innerText = grid[y][x] || '';
+      div.appendChild(cell);
     }
-    return results;
+  }
 }
-
-// ======= RICHTINGEN =======
-
-function getDirs(type) {
-    if (type==="H") return [[1,0],[-1,0]];
-    if (type==="V") return [[0,1],[0,-1]];
-    return [[1,1],[-1,-1],[1,-1],[-1,1]];
-}
-
-function createDirectionList(n) {
-
-    let list = [];
-
-    for (let i = 0; i < n; i++) {
-        if (i % 3 === 0) list.push("H");
-        else if (i % 3 === 1) list.push("V");
-        else list.push("D");
-    }
-
-    return shuffle(list);
-}
-
-// ======= GRID =======
-
-function createGrid(size) {
-    return Array.from({length:size}, ()=>Array(size).fill(null));
-}
-
-// ======= PLAATSEN =======
-
-function canPlace(grid, word, x, y, dir) {
-
-    let dx = dir[0], dy = dir[1];
-    let size = grid.length;
-
-    let endX = x + dx*(word.length-1);
-    let endY = y + dy*(word.length-1);
-
-    if (endX<0||endY<0||endX>=size||endY>=size) return false;
-
-    for (let i=0;i<word.length;i++) {
-
-        let cx = x + dx*i;
-        let cy = y + dy*i;
-
-        let cell = grid[cy][cx];
-
-        if (cell!==null && cell!==word[i]) return false;
-    }
-
-    return true;
-}
-
-function placeAt(grid, word, pos) {
-    let {x,y,dir} = pos;
-    let dx = dir[0], dy = dir[1];
-
-    for (let i=0;i<word.length;i++) {
-        grid[y+dy*i][x+dx*i] = word[i];
-    }
-}
-
-// ======= CHECK LEGE VAKJES =======
-
-function hasAdjacentEmpty(grid) {
-    let size = grid.length;
-
-    for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-
-            if (grid[y][x] === null) {
-
-                // alleen horizontaal checken
-                if (x < size - 1 && grid[y][x+1] === null) return true;
-                if (x > 0 && grid[y][x-1] === null) return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-// ======= HULP =======
-
-function countEmpty(grid) {
-    let count = 0;
-    for (let row of grid) {
-        for (let cell of row) {
-            if (cell === null) count++;
-        }
-    }
-    return count;
-}
-
-function copyGrid(grid) {
-    return grid.map(row=>row.slice());
-}
-
-function copyInto(target, source) {
-    for (let y=0;y<target.length;y++) {
-        for (let x=0;x<target.length;x++) {
-            target[y][x] = source[y][x];
-        }
-    }
-}
-
-function shuffle(arr) {
-    for (let i=arr.length-1;i>0;i--) {
-        let j=Math.floor(Math.random()*(i+1));
-        [arr[i],arr[j]]=[arr[j],arr[i]];
-    }
-    return arr;
-}
-
-function drawGrid(grid) {
-    return grid.map(r=>r.map(c=>c||".").join(" ")).join("\n");
-}
-
 </script>
 
 </body>
