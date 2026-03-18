@@ -63,34 +63,58 @@ function generatePuzzle(words, message) {
 
         for (let attempt=0; attempt<maxAttempts; attempt++) {
 
-            let grid = createGrid(size, message);
+            let grid = createGrid(size);
+
+            let messageCells = getRandomCells(grid, message.length);
+            let messageMap = buildMessageMap(messageCells, message);
 
             let dirs = createDirectionList(words.length);
 
-            let success = solve(grid, words, dirs);
+            let success = solve(grid, words, dirs, messageMap);
 
             if (success) {
-                fillRandom(grid);
+
+                let empty = countEmpty(grid);
+
+                if (empty > message.length) {
+                    let verschil = empty - message.length;
+
+                    if (verschil <= 10) {
+                        return {
+                            success:false,
+                            reason: "Oplossing moet " + verschil + " letters langer zijn"
+                        };
+                    } else {
+                        return {
+                            success:false,
+                            reason: "Te veel lege vakjes (" + verschil + "). Voeg langere woorden toe."
+                        };
+                    }
+                }
+
+                placeMessage(grid, message, messageCells);
+
                 return {success:true, grid};
             }
         }
 
-        // als alles faalt → analyse
-        let analysis = analyzeFailure(words, message, size);
-        return {success:false, reason:analysis};
+        return {
+            success:false,
+            reason: analyzeFailure(words, message, size)
+        };
     }
 }
 
 // ======================= SOLVER =======================
 
-function solve(grid, words, directions) {
+function solve(grid, words, directions, messageMap) {
 
     if (words.length === 0) return true;
 
     let options = words.map((word, i)=>({
         word,
         dirType: directions[i],
-        positions: getPositionsByType(grid, word, directions[i])
+        positions: getPositionsByType(grid, word, directions[i], messageMap)
     }));
 
     options.sort((a,b)=>a.positions.length - b.positions.length);
@@ -108,7 +132,7 @@ function solve(grid, words, directions) {
         let remainingWords = words.filter(w=>w!==current.word);
         let remainingDirs = directions.slice(1);
 
-        if (solve(grid, remainingWords, remainingDirs)) return true;
+        if (solve(grid, remainingWords, remainingDirs, messageMap)) return true;
 
         copyInto(grid, snapshot);
     }
@@ -118,14 +142,14 @@ function solve(grid, words, directions) {
 
 // ======================= POSITIES =======================
 
-function getPositionsByType(grid, word, type) {
+function getPositionsByType(grid, word, type, messageMap) {
     let results = [];
     let dirs = getDirs(type);
 
     for (let dir of dirs) {
         for (let y=0;y<grid.length;y++) {
             for (let x=0;x<grid.length;x++) {
-                if (canPlace(grid, word, x, y, dir)) {
+                if (canPlace(grid, word, x, y, dir, messageMap)) {
                     results.push({x,y,dir});
                 }
             }
@@ -136,34 +160,48 @@ function getPositionsByType(grid, word, type) {
 
 // ======================= GRID =======================
 
-function createGrid(size, message) {
-    let grid = Array.from({length:size}, ()=>Array(size).fill(null));
-
-    let i=0;
-    for (let y=0;y<size;y++) {
-        for (let x=0;x<size;x++) {
-            if (i < message.length) {
-                grid[y][x] = message[i++];
-            }
-        }
-    }
-    return grid;
+function createGrid(size) {
+    return Array.from({length:size}, ()=>Array(size).fill(null));
 }
 
-function fillRandom(grid) {
-    let letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+// ======================= MESSAGE =======================
+
+function getRandomCells(grid, count) {
+    let cells = [];
+
     for (let y=0;y<grid.length;y++) {
         for (let x=0;x<grid.length;x++) {
-            if (grid[y][x] === null) {
-                grid[y][x] = letters[Math.floor(Math.random()*letters.length)];
-            }
+            cells.push({x,y});
         }
+    }
+
+    shuffle(cells);
+
+    return cells.slice(0, count);
+}
+
+function buildMessageMap(cells, message) {
+    let map = {};
+
+    for (let i=0;i<cells.length;i++) {
+        let {x,y} = cells[i];
+        if (!map[y]) map[y] = {};
+        map[y][x] = message[i];
+    }
+
+    return map;
+}
+
+function placeMessage(grid, message, cells) {
+    for (let i=0;i<message.length;i++) {
+        let {x,y} = cells[i];
+        grid[y][x] = message[i];
     }
 }
 
 // ======================= PLAATSEN =======================
 
-function canPlace(grid, word, x, y, dir) {
+function canPlace(grid, word, x, y, dir, messageMap) {
     let dx = dir[0], dy = dir[1];
     let size = grid.length;
 
@@ -177,6 +215,10 @@ function canPlace(grid, word, x, y, dir) {
         let cy = y + dy*i;
 
         let cell = grid[cy][cx];
+
+        if (messageMap[cy] && messageMap[cy][cx] && messageMap[cy][cx] !== word[i]) {
+            return false;
+        }
 
         if (cell!==null && cell!==word[i]) return false;
     }
@@ -194,6 +236,16 @@ function placeAt(grid, word, pos) {
 }
 
 // ======================= HULP =======================
+
+function countEmpty(grid) {
+    let count = 0;
+    for (let row of grid) {
+        for (let cell of row) {
+            if (cell === null) count++;
+        }
+    }
+    return count;
+}
 
 function getDirs(type) {
     if (type==="H") return [[1,0],[-1,0]];
