@@ -6,16 +6,24 @@
 <style>
 body { font-family: Arial; text-align: center; }
 #grid { display: grid; gap: 2px; justify-content: center; margin-top: 20px; }
-.cell { width: 30px; height: 30px; border: 1px solid #ccc; display:flex; align-items:center; justify-content:center; font-weight:bold; }
+.cell {
+  width: 30px; height: 30px;
+  border: 1px solid #ccc;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:bold;
+}
 </style>
 </head>
 <body>
 
 <h2>Woordzoeker Generator</h2>
-<textarea id="words" rows="5" cols="40" placeholder="Voer woorden in, gescheiden door komma's"></textarea><br><br>
+
+<textarea id="words" rows="5" cols="40"></textarea><br><br>
 <button onclick="start()">Genereer</button>
+
 <p id="timer"></p>
 <p id="status"></p>
+
 <div id="grid"></div>
 
 <script>
@@ -37,22 +45,23 @@ function start(){
 
   let startTime = Date.now();
   let best = null;
+  let failStats = {place:0,empty:0,direction:0};
 
   function loop(){
     let elapsed = (Date.now()-startTime)/1000;
     document.getElementById('timer').innerText = "Tijd: " + (10 - elapsed).toFixed(1);
 
     if(elapsed > 10){
-      finish(best);
+      finish(best, failStats, words);
       return;
     }
 
-    let attempt = generate(words);
+    let result = generate(words, failStats);
 
-    if(attempt){
-      let score = scoreGrid(attempt);
+    if(result){
+      let score = scoreGrid(result);
       if(!best || score > best.score){
-        best = {grid:attempt, score};
+        best = {grid:result.grid, score};
       }
     }
 
@@ -62,31 +71,49 @@ function start(){
   loop();
 }
 
-function generate(words){
+function generate(words, failStats){
   let maxLen = Math.max(...words.map(w=>w.length));
-  let size = maxLen + Math.floor(Math.random()*8);
+  let size = maxLen + Math.floor(Math.random()*6);
 
   let grid = Array.from({length:size},()=>Array(size).fill(''));
+  let placedWords = [];
+
+  let dirCount = {h:0,v:0,d:0};
 
   words = [...words].sort((a,b)=>b.length-a.length);
 
   for(let word of words){
-    let placed = placeWord(grid, word);
-    if(!placed) return null;
+    let placed = placeWord(grid, word, dirCount, placedWords);
+
+    if(!placed){
+      failStats.place++;
+      return null;
+    }
+
+    placedWords.push(placed);
   }
 
-  if(!checkEmpty(grid)) return null;
+  if(!checkDirectionBalance(dirCount, words.length)){
+    failStats.direction++;
+    return null;
+  }
 
-  return grid;
+  if(!checkEmpty(grid)){
+    failStats.empty++;
+    return null;
+  }
+
+  return {grid};
 }
 
-function placeWord(grid, word){
+function placeWord(grid, word, dirCount, placedWords){
   let size = grid.length;
   let options = [];
 
   for(let dir of directions){
     for(let x=0;x<size;x++){
       for(let y=0;y<size;y++){
+
         let overlap = 0;
         let ok = true;
 
@@ -97,8 +124,35 @@ function placeWord(grid, word){
           if(nx<0||ny<0||nx>=size||ny>=size){ ok=false; break; }
 
           let c = grid[ny][nx];
+
           if(c && c!==word[i]){ ok=false; break; }
-          if(c===word[i]) overlap++;
+
+          if(c===word[i]){
+            // geen kruising zelfde richting
+            for(let pw of placedWords){
+              if(pw.positions.some(p=>p.x===nx && p.y===ny)){
+                if(pw.dir.type === dir.type){
+                  ok=false;
+                  break;
+                }
+              }
+            }
+            overlap++;
+          }
+        }
+
+        if(!ok) continue;
+
+        // check "stapel" (optie C)
+        for(let pw of placedWords){
+          if(pw.dir.type === dir.type){
+            if(pw.startX === x && pw.dir.type === 'h'){
+              ok=false;
+            }
+            if(pw.startY === y && pw.dir.type === 'v'){
+              ok=false;
+            }
+          }
         }
 
         if(ok) options.push({x,y,dir,overlap});
@@ -106,19 +160,32 @@ function placeWord(grid, word){
     }
   }
 
+  if(options.length===0) return null;
+
   options.sort((a,b)=>b.overlap-a.overlap);
 
-  if(options.length===0) return false;
-
   let pick = options[Math.floor(Math.random()*Math.min(5,options.length))];
+
+  let positions = [];
 
   for(let i=0;i<word.length;i++){
     let nx = pick.x + pick.dir.dx*i;
     let ny = pick.y + pick.dir.dy*i;
     grid[ny][nx] = word[i];
+    positions.push({x:nx,y:ny});
   }
 
-  return true;
+  return {startX:pick.x,startY:pick.y,dir:pick.dir,positions};
+}
+
+function checkDirectionBalance(dirCount, total){
+  let min = total * 0.2;
+
+  return (
+    dirCount.h >= min &&
+    dirCount.v >= min &&
+    dirCount.d >= min
+  );
 }
 
 function checkEmpty(grid){
@@ -137,22 +204,36 @@ function checkEmpty(grid){
     }
   }
 
-  return empty<=20;
+  return empty <= 20;
 }
 
-function scoreGrid(grid){
+function scoreGrid(result){
+  let grid = result.grid;
   let empty = 0;
+
   for(let row of grid){
     for(let c of row){
       if(!c) empty++;
     }
   }
-  return 100 - empty - grid.length;
+
+  return 200 - empty - grid.length;
 }
 
-function finish(best){
+function finish(best, failStats, words){
+
   if(!best){
-    document.getElementById('status').innerText = "Geen goede puzzel gevonden";
+    let msg = "Geen puzzel mogelijk. ";
+
+    if(failStats.place > failStats.empty && failStats.place > failStats.direction){
+      msg += 'Verwijder een woord (bijv: "' + words[0] + '")';
+    } else if(failStats.empty > failStats.direction){
+      msg += "Voeg meer woorden toe";
+    } else {
+      msg += "Verdeling richtingen lukt niet";
+    }
+
+    document.getElementById('status').innerText = msg;
     return;
   }
 
