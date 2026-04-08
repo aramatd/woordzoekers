@@ -2,15 +2,17 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Woordzoeker Generator</title>
 <style>
-body { font-family: Arial; text-align: center; }
-#grid { display: grid; gap: 2px; justify-content: center; margin-top: 20px; }
-.cell {
+body { font-family: Arial; padding: 20px; }
+textarea { width: 300px; height: 150px; }
+table { border-collapse: collapse; margin-top: 20px; }
+td {
   width: 30px; height: 30px;
-  border: 1px solid #ccc;
-  display:flex; align-items:center; justify-content:center;
-  font-weight:bold;
+  border: 1px solid #999;
+  text-align: center;
+  font-weight: bold;
 }
 </style>
 </head>
@@ -18,241 +20,199 @@ body { font-family: Arial; text-align: center; }
 
 <h2>Woordzoeker Generator</h2>
 
-<textarea id="words" rows="5" cols="40"></textarea><br><br>
-<button onclick="start()">Genereer</button>
+<label>Woorden (één per regel):</label><br>
+<textarea id="words"></textarea><br><br>
 
-<p id="timer"></p>
+<label>Grid grootte:</label>
+<select id="size">
+  <option value="10">10x10</option>
+  <option value="12">12x12</option>
+  <option value="15">15x15</option>
+  <option value="20">20x20</option>
+</select>
+
+<button onclick="startGeneration()">Genereer</button>
+
+<p>Tijd: <span id="timer">30</span>s</p>
 <p id="status"></p>
 
 <div id="grid"></div>
 
 <script>
 const directions = [
-  {dx:1,dy:0,type:'h'}, {dx:-1,dy:0,type:'h'},
-  {dx:0,dy:1,type:'v'}, {dx:0,dy:-1,type:'v'},
-  {dx:1,dy:1,type:'d'}, {dx:-1,dy:-1,type:'d'},
-  {dx:-1,dy:1,type:'d'}, {dx:1,dy:-1,type:'d'}
+  { dx: 1, dy: 0 }, { dx: -1, dy: 0 },
+  { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+  { dx: 1, dy: 1 }, { dx: -1, dy: -1 },
+  { dx: 1, dy: -1 }, { dx: -1, dy: 1 }
 ];
 
-function start(){
-  let words = document.getElementById('words').value
-    .toUpperCase()
-    .replace(/[^A-Z,]/g,'')
-    .split(',')
-    .filter(w=>w.length>0);
-
-  words = [...new Set(words)];
-
-  let startTime = Date.now();
-  let best = null;
-  let failStats = {place:0,empty:0,direction:0};
-
-  function loop(){
-    let elapsed = (Date.now()-startTime)/1000;
-    document.getElementById('timer').innerText = "Tijd: " + (10 - elapsed).toFixed(1);
-
-    if(elapsed > 10){
-      finish(best, failStats, words);
-      return;
-    }
-
-    let result = generate(words, failStats);
-
-    if(result){
-      let score = scoreGrid(result);
-      if(!best || score > best.score){
-        best = {grid:result.grid, score};
-      }
-    }
-
-    requestAnimationFrame(loop);
-  }
-
-  loop();
+function createGrid(size) {
+  return Array.from({ length: size }, () => Array(size).fill(null));
 }
 
-function generate(words, failStats){
-  let maxLen = Math.max(...words.map(w=>w.length));
-  let size = maxLen + Math.floor(Math.random()*6);
-
-  let grid = Array.from({length:size},()=>Array(size).fill(''));
-  let placedWords = [];
-
-  let dirCount = {h:0,v:0,d:0};
-
-  words = [...words].sort((a,b)=>b.length-a.length);
-
-  for(let word of words){
-    let placed = placeWord(grid, word, dirCount, placedWords);
-
-    if(!placed){
-      failStats.place++;
-      return null;
-    }
-
-    placedWords.push(placed);
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-
-  if(!checkDirectionBalance(dirCount, words.length)){
-    failStats.direction++;
-    return null;
-  }
-
-  if(!checkEmpty(grid)){
-    failStats.empty++;
-    return null;
-  }
-
-  return {grid};
 }
 
-function placeWord(grid, word, dirCount, placedWords){
-  let size = grid.length;
-  let options = [];
+function canPlace(grid, word, x, y, dir) {
+  for (let i = 0; i < word.length; i++) {
+    const nx = x + dir.dx * i;
+    const ny = y + dir.dy * i;
 
-  for(let dir of directions){
-    for(let x=0;x<size;x++){
-      for(let y=0;y<size;y++){
-
-        let overlap = 0;
-        let ok = true;
-
-        for(let i=0;i<word.length;i++){
-          let nx = x + dir.dx*i;
-          let ny = y + dir.dy*i;
-
-          if(nx<0||ny<0||nx>=size||ny>=size){ ok=false; break; }
-
-          let c = grid[ny][nx];
-
-          if(c && c!==word[i]){ ok=false; break; }
-
-          if(c===word[i]){
-            // geen kruising zelfde richting
-            for(let pw of placedWords){
-              if(pw.positions.some(p=>p.x===nx && p.y===ny)){
-                if(pw.dir.type === dir.type){
-                  ok=false;
-                  break;
-                }
-              }
-            }
-            overlap++;
-          }
-        }
-
-        if(!ok) continue;
-
-        // check "stapel" (optie C)
-        for(let pw of placedWords){
-          if(pw.dir.type === dir.type){
-            if(pw.startX === x && pw.dir.type === 'h'){
-              ok=false;
-            }
-            if(pw.startY === y && pw.dir.type === 'v'){
-              ok=false;
-            }
-          }
-        }
-
-        if(ok) options.push({x,y,dir,overlap});
-      }
+    if (!grid[ny] || !grid[ny][nx]) {
+      if (grid[ny] === undefined || grid[ny][nx] === undefined) return false;
     }
+
+    const cell = grid[ny][nx];
+    if (cell !== null && cell !== word[i]) return false;
   }
+  return true;
+}
 
-  if(options.length===0) return null;
-
-  options.sort((a,b)=>b.overlap-a.overlap);
-
-  let pick = options[Math.floor(Math.random()*Math.min(5,options.length))];
-
-  let positions = [];
-
-  for(let i=0;i<word.length;i++){
-    let nx = pick.x + pick.dir.dx*i;
-    let ny = pick.y + pick.dir.dy*i;
+function placeWord(grid, word, x, y, dir) {
+  for (let i = 0; i < word.length; i++) {
+    const nx = x + dir.dx * i;
+    const ny = y + dir.dy * i;
     grid[ny][nx] = word[i];
-    positions.push({x:nx,y:ny});
   }
-
-  return {startX:pick.x,startY:pick.y,dir:pick.dir,positions};
 }
 
-function checkDirectionBalance(dirCount, total){
-  let min = total * 0.2;
-
-  return (
-    dirCount.h >= min &&
-    dirCount.v >= min &&
-    dirCount.d >= min
-  );
+function removeWord(grid, word, x, y, dir) {
+  for (let i = 0; i < word.length; i++) {
+    const nx = x + dir.dx * i;
+    const ny = y + dir.dy * i;
+    grid[ny][nx] = null;
+  }
 }
 
-function checkEmpty(grid){
-  let empty = 0;
+function getPlacements(grid, word) {
+  const placements = [];
+  const size = grid.length;
 
-  for(let y=0;y<grid.length;y++){
-    let streak = 0;
-    for(let x=0;x<grid.length;x++){
-      if(!grid[y][x]){
-        empty++;
-        streak++;
-        if(streak>1) return false;
-      } else {
-        streak=0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      for (let dir of directions) {
+        if (canPlace(grid, word, x, y, dir)) {
+          placements.push({ x, y, dir });
+        }
       }
     }
   }
 
-  return empty <= 20;
+  return placements;
 }
 
-function scoreGrid(result){
-  let grid = result.grid;
-  let empty = 0;
-
-  for(let row of grid){
-    for(let c of row){
-      if(!c) empty++;
+function countEmpty(grid) {
+  let count = 0;
+  for (let row of grid) {
+    for (let cell of row) {
+      if (cell === null) count++;
     }
   }
-
-  return 200 - empty - grid.length;
+  return count;
 }
 
-function finish(best, failStats, words){
+async function generate(words, size) {
+  const grid = createGrid(size);
+  words.sort((a, b) => b.length - a.length);
 
-  if(!best){
-    let msg = "Geen puzzel mogelijk. ";
+  const start = Date.now();
+  const TIME_LIMIT = 30000;
 
-    if(failStats.place > failStats.empty && failStats.place > failStats.direction){
-      msg += 'Verwijder een woord (bijv: "' + words[0] + '")';
-    } else if(failStats.empty > failStats.direction){
-      msg += "Voeg meer woorden toe";
+  async function backtrack(index) {
+    if (Date.now() - start > TIME_LIMIT) return "timeout";
+
+    if (index === words.length) return true;
+
+    const word = words[index];
+    let placements = getPlacements(grid, word);
+    shuffle(placements);
+
+    for (let p of placements) {
+      placeWord(grid, word, p.x, p.y, p.dir);
+
+      const result = await backtrack(index + 1);
+
+      if (result === true) return true;
+      if (result === "timeout") return "timeout";
+
+      removeWord(grid, word, p.x, p.y, p.dir);
+    }
+
+    return false;
+  }
+
+  const result = await backtrack(0);
+
+  if (result === true) {
+    const empty = countEmpty(grid);
+    return { success: empty <= 15, grid, empty };
+  }
+
+  return { success: false, reason: result };
+}
+
+function drawGrid(grid) {
+  const container = document.getElementById("grid");
+  container.innerHTML = "";
+
+  const table = document.createElement("table");
+
+  for (let row of grid) {
+    const tr = document.createElement("tr");
+    for (let cell of row) {
+      const td = document.createElement("td");
+      td.textContent = cell || "";
+      tr.appendChild(td);
+    }
+    table.appendChild(tr);
+  }
+
+  container.appendChild(table);
+}
+
+function startTimer() {
+  let remaining = 30;
+  document.getElementById("timer").textContent = remaining;
+
+  const interval = setInterval(() => {
+    remaining--;
+    document.getElementById("timer").textContent = remaining;
+
+    if (remaining <= 0) clearInterval(interval);
+  }, 1000);
+}
+
+async function startGeneration() {
+  const words = document.getElementById("words")
+    .value.split("\n")
+    .map(w => w.trim().toUpperCase())
+    .filter(w => w.length > 0);
+
+  const size = parseInt(document.getElementById("size").value);
+
+  document.getElementById("status").textContent = "Bezig met genereren...";
+  startTimer();
+
+  const result = await generate(words, size);
+
+  if (result.success) {
+    drawGrid(result.grid);
+    document.getElementById("status").textContent =
+      `Gelukt. Lege vakjes: ${result.empty}`;
+  } else {
+    let msg = "Mislukt: ";
+
+    if (result.reason === "timeout") {
+      msg += "tijdslimiet bereikt";
     } else {
-      msg += "Verdeling richtingen lukt niet";
+      msg += "geen oplossing";
     }
 
-    document.getElementById('status').innerText = msg;
-    return;
-  }
-
-  render(best.grid);
-  document.getElementById('status').innerText = "Beste poging weergegeven";
-}
-
-function render(grid){
-  let div = document.getElementById('grid');
-  div.innerHTML='';
-  div.style.gridTemplateColumns = `repeat(${grid.length}, 30px)`;
-
-  for(let y=0;y<grid.length;y++){
-    for(let x=0;x<grid.length;x++){
-      let cell = document.createElement('div');
-      cell.className='cell';
-      cell.innerText = grid[y][x] || '';
-      div.appendChild(cell);
-    }
+    document.getElementById("status").textContent = msg;
   }
 }
 </script>
