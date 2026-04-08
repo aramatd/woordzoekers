@@ -21,7 +21,8 @@ td {
 <h2>Woordzoeker Generator</h2>
 
 <label>Woorden (één per regel):</label><br>
-<textarea id="words"></textarea><br><br>
+<textarea id="words" oninput="updateLetterCount()"></textarea>
+<p id="letterCount">Totaal letters: 0</p><br><br>
 
 <label>Grid grootte:</label>
 <select id="size" onchange="updateAdvice()">
@@ -47,6 +48,19 @@ const directions = [
   { dx: 1, dy: 1 }, { dx: -1, dy: -1 },
   { dx: 1, dy: -1 }, { dx: -1, dy: 1 }
 ];
+
+function updateLetterCount() {
+  const words = document.getElementById("words")
+    .value.split("
+")
+    .map(w => w.trim())
+    .filter(w => w.length > 0);
+
+  const totalLetters = words.reduce((sum, w) => sum + w.length, 0);
+
+  document.getElementById("letterCount").textContent =
+    `Totaal letters: ${totalLetters}`;
+}
 
 function updateAdvice() {
   const size = parseInt(document.getElementById("size").value);
