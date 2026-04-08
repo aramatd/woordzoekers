@@ -24,12 +24,14 @@ td {
 <textarea id="words"></textarea><br><br>
 
 <label>Grid grootte:</label>
-<select id="size">
+<select id="size" onchange="updateAdvice()">
   <option value="10">10x10</option>
   <option value="12">12x12</option>
   <option value="15">15x15</option>
   <option value="20">20x20</option>
 </select>
+
+<p id="advice"></p>
 
 <button onclick="startGeneration()">Genereer</button>
 
@@ -45,6 +47,16 @@ const directions = [
   { dx: 1, dy: 1 }, { dx: -1, dy: -1 },
   { dx: 1, dy: -1 }, { dx: -1, dy: 1 }
 ];
+
+function updateAdvice() {
+  const size = parseInt(document.getElementById("size").value);
+  const totalCells = size * size;
+  const minLetters = Math.floor(totalCells * 0.8);
+  const maxLetters = Math.floor(totalCells * 1.1);
+
+  document.getElementById("advice").textContent =
+    `Aanbevolen totaal aantal letters: ${minLetters} - ${maxLetters}.`;
+}
 
 function createGrid(size) {
   return Array.from({ length: size }, () => Array(size).fill(null));
@@ -62,9 +74,7 @@ function canPlace(grid, word, x, y, dir) {
     const nx = x + dir.dx * i;
     const ny = y + dir.dy * i;
 
-    if (!grid[ny] || !grid[ny][nx]) {
-      if (grid[ny] === undefined || grid[ny][nx] === undefined) return false;
-    }
+    if (ny < 0 || ny >= grid.length || nx < 0 || nx >= grid.length) return false;
 
     const cell = grid[ny][nx];
     if (cell !== null && cell !== word[i]) return false;
@@ -194,7 +204,11 @@ async function startGeneration() {
 
   const size = parseInt(document.getElementById("size").value);
 
-  document.getElementById("status").textContent = "Bezig met genereren...";
+  const totalLetters = words.reduce((sum, w) => sum + w.length, 0);
+
+  document.getElementById("status").textContent =
+    `Totaal letters: ${totalLetters}`;
+
   startTimer();
 
   const result = await generate(words, size);
@@ -215,6 +229,8 @@ async function startGeneration() {
     document.getElementById("status").textContent = msg;
   }
 }
+
+updateAdvice();
 </script>
 
 </body>
